@@ -44,7 +44,7 @@ read_tdreport <- function(tdreport, fdr_cutoff = 0.01) {
   
   # Initialize the tibble where we'll be dropping our most 
   # important data, add NA columns for later use
-    
+  
   isoform_id <- con %>%
     RSQLite::dbGetQuery("SELECT Id, AccessionNumber 
                         FROM Isoform") %>%
@@ -55,7 +55,7 @@ read_tdreport <- function(tdreport, fdr_cutoff = 0.01) {
   # Get Qvals and other info from "GlobalQualitativeConfidence"
   # table
   
-  q_vals <<- con %>%
+  q_vals <- con %>%
     RSQLite::dbGetQuery("SELECT ExternalId, GlobalQvalue, HitId 
                         FROM GlobalQualitativeConfidence") %>%
     as_tibble %>% filter(.$ExternalId != 0)
@@ -65,60 +65,97 @@ read_tdreport <- function(tdreport, fdr_cutoff = 0.01) {
     # Retrieve BiologicalProteoformIDs for which IsoformID
     # is a match to this tibble row value
     
-    # bioprotid <<- con %>%
+    # bioprotid <- con %>%
     #   RSQLite::dbGetQuery("SELECT Id, IsoformId 
     #                       FROM BiologicalProteoform") %>%
     #   as_tibble %>%
     #   filter(IsoformId == isoform_id$Id[i])
     
-    # Get minimum Q value from among all Q values for this Isoform ID
-    # then assign it to "Qvalue" column
-
-    min_q_val <<-
-      q_vals$GlobalQvalue[q_vals$ExternalId == isoform_id$Id[i]] %>%
-      min(na.rm = TRUE)
+    # Check to see if at least one corresponding Q value
+    # can be found for the corresponding Isoform/ExternalId
+    # inthe q_vals tibble
+    
+    qValueExists <- any(q_vals$ExternalId == isoform_id$Id[i])
+    
+    # If there is a Q value, get minimum Q value from among all Q values
+    # for this Isoform ID then assign it to "Qvalue" column. Otherwise
+    # assign value 1000000 so it is rejected when performing FDR cutoff
+    
+    if (qValueExists == TRUE) {
+      
+      min_q_val <-
+        q_vals$GlobalQvalue[q_vals$ExternalId == isoform_id$Id[i]] %>%
+        min(na.rm = TRUE)
+      
+    } else {
+      
+      min_q_val <- 1000000
+      
+    }
     
     isoform_id$Qvalue[i] <- min_q_val
     
     # Get HitId from q_vals corresponding to lowest Q value hit
     # to be used to find information on data file name
     
-    datafile_hit_id <<- 
-      q_vals %>%
-      filter(GlobalQvalue == min_q_val) %>%
-      .$HitId %>% 
-      .[1]
+    if (qValueExists == TRUE) {
+      
+      datafile_hit_id <- 
+        q_vals %>%
+        filter(GlobalQvalue == min_q_val) %>%
+        .$HitId %>% 
+        .[1]
+      
+    } else {
+      
+      datafile_hit_id <- NA
+      
+    }
     
     # Pull all HitIds and DataFileIds from "Hit" table and
     # filter down to single value containing datafile number
     # for lowest Q-value hit
     
-    datafile_id <<- con %>%
-      RSQLite::dbGetQuery("SELECT Id, DataFileId 
+    
+    if (qValueExists == TRUE) {
+      
+      datafile_id <- con %>%
+        RSQLite::dbGetQuery("SELECT Id, DataFileId 
                           FROM Hit") %>%
-      as_tibble %>% 
-      filter(Id == {{datafile_hit_id}}) %>% 
-      .$DataFileId %>% 
-      .[1]
+        as_tibble %>% 
+        filter(Id == {{datafile_hit_id}}) %>% 
+        .$DataFileId %>% 
+        .[1]
+      
+    } else {
+      
+      datafile_id <- NA
+      
+    }
     
     # Lookup datafile_id in "Id" column of "Datafile" table
     # to get corresponding file name
     
-    isoform_id$filename[i] <- con %>%
-      RSQLite::dbGetQuery("SELECT Id, Name 
+    if (qValueExists == TRUE) {
+      
+      isoform_id$filename[i] <- con %>%
+        RSQLite::dbGetQuery("SELECT Id, Name 
                           FROM DataFile") %>%
-      as_tibble %>% 
-      filter(Id == datafile_id) %>% 
-      .$Name
-    
+        as_tibble %>% 
+        filter(Id == datafile_id) %>% 
+        .$Name
+      
+    } else {
+      
+      isoform_id$filename[i] <- NA
+      
+    }
   }
-  
-  isoform_id_global <<- isoform_id
   
   # Filter isoform_id by FDR cutoff value (default 0.01 or 1%)
   # and place results in "output" tibble
   
-  output <<- isoform_id %>% 
+  output <- isoform_id %>% 
     filter(Qvalue < fdr_cutoff)
   
   setwd(here())
@@ -128,6 +165,7 @@ read_tdreport <- function(tdreport, fdr_cutoff = 0.01) {
   dbDisconnect(con)
   
   return(output)
+  
 }
 
 getuniprotinfo <- function(tbl, taxon = NULL, tdreport = TRUE) {
@@ -169,10 +207,7 @@ getuniprotinfo <- function(tbl, taxon = NULL, tdreport = TRUE) {
     
   }
   
-  results_global <<- results
-  results_temp_global <<- results_temp
-  
-  results_after_join <<- left_join(results, results_temp)
+  results_after_join <- left_join(results, results_temp)
   return(results_after_join)
   
 }
@@ -217,11 +252,14 @@ getGOterms <- function(tbl) {
 getlocations <- function(resultslist) {
   
   counts <- tibble(filename = names(resultslist),
+                   protein_count = NA,
                    cytosol_count = NA,
                    membrane_count = NA)
   
   for (i in seq_along(resultslist)) {
   
+    counts$protein_count[i] <- resultslist[[i]] %>% .$UNIPROTKB %>% length()
+    
     counts$cytosol_count[i] <- sum(str_detect(resultslist[[i]]$GO_subcell_loc, "cytosol"), na.rm = TRUE) +
       sum(str_detect(resultslist[[i]]$GO_subcell_loc, "cytoplasm"), na.rm = TRUE)
     
@@ -254,19 +292,16 @@ if (length(unique(extension)) > 1) {
   
   print("Reading csv files...")
   proteinlist  <- filelist %>% map(read_csv)
-  names(proteinlist) %<>% stringr::str_trunc(30)
-  
+
 } else if (extension[[1]] == "xlsx") {
   
   print("Reading xlsx files...")
   proteinlist  <- filelist %>% map(read_xlsx)
-  names(proteinlist) %<>% stringr::str_trunc(30)
-  
+
 } else if (extension[[1]] == "tdReport") {
   
   print("Reading tdReport...")
   proteinlist <- filelist %>% map(read_tdreport, fdr_cutoff = fdr)
-  names(proteinlist) %<>% stringr::str_trunc(30)
   tdreport_file <- TRUE
   
 } else {
@@ -310,32 +345,17 @@ results_protein[[length(results_protein)+1]] <- getlocations(results_protein)
 systime <- format(Sys.time(), "%Y%m%d_%H%M%S")
 resultsname <- glue("{systime}_protein_results.xlsx")
 
-names(results_protein) %<>% stringr::str_trunc(30)
+names(results_protein) <- unlist(filelist)
+
+for (i in seq_along(names(results_protein))) {
+ 
+  names(results_protein)[i] %<>% stringr::str_trunc(28) %>% paste(i, "_", ., sep = "")
+   
+}
+
+setwd(here("output"))
 
 results_protein %>%
   writexl::write_xlsx(path = resultsname)
 
-# results_plot <- ggplot() +
-#   # geom_histogram(data = results[[1]], aes(ave_mass),
-#   #                binwidth = 1000, col = "black", fill = "blue", alpha = 0.4) +
-#   # geom_histogram(data = results[[2]], aes(ave_mass),
-#   #                binwidth = 1000, col = "black", fill = "red", alpha = 0.4) +
-#   # geom_histogram(data = results[[3]], aes(ave_mass),
-#   #                binwidth = 1000, col = "black", fill = "yellow", alpha = 0.4) +
-#   geom_freqpoly(data = results[[1]], aes(ave_mass), color = "red", binwidth = 1000) +
-#   geom_freqpoly(data = results[[2]], aes(ave_mass), color = "blue", binwidth = 1000) +
-#   geom_freqpoly(data = results[[3]], aes(ave_mass), color = "dark green", binwidth = 1000) +
-#   geom_freqpoly(data = results[[4]], aes(ave_mass), color = "black", binwidth = 1000) +
-#   theme_minimal()
-
-
-# bup <- UniProt.ws::select(up,
-#                    keys = "P60624",
-#                    columns = c("ENTRY-NAME", "GENEID",
-#                                "PROTEIN-NAMES", "ORGANISM", 
-#                                "ORGANISM-ID", "SEQUENCE", 
-#                                "FUNCTION",
-#                                "SUBCELLULAR-LOCATIONS", 
-#                                "GO-ID"),
-#                    keytype = "UNIPROTKB") %>% 
-#   as_tibble
+setwd(here())

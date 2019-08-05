@@ -45,13 +45,16 @@ read_tdreport <- function(tdreport, fdr_cutoff = 0.01) {
   # Initialize the tibble where we'll be dropping our most 
   # important data, add NA columns for later use
   
-  biologicalproteoform <<- con %>%
+  biologicalproteoform <- con %>%
     RSQLite::dbGetQuery("SELECT Id, ProteoformRecordNum, 
                         IsoformId, ChemicalProteoformId 
                         FROM BiologicalProteoform") %>%
     as_tibble %>% 
     add_column(Qvalue = NA) %>% 
-    add_column(filename = NA)
+    add_column(filename = NA) %>% 
+    add_column(MonoisotopicMass = NA) %>% 
+    add_column(AverageMass = NA)
+    
   
   #Get accession numbers to correlate with isoform IDs later
   
@@ -68,17 +71,36 @@ read_tdreport <- function(tdreport, fdr_cutoff = 0.01) {
   # Get Qvals and other info from "GlobalQualitativeConfidence"
   # table
   
-  q_vals <<- con %>%
+  q_vals <- con %>%
     RSQLite::dbGetQuery("SELECT ExternalId, GlobalQvalue, HitId 
                         FROM GlobalQualitativeConfidence") %>%
     as_tibble %>% filter(.$ExternalId != 0)
+  
+  # Get info from ChemicalProteoform and BiologicalProteoform tables
+  # to allow for assignment of masses
+  
+  bioprot <- con %>%
+    RSQLite::dbGetQuery("SELECT Id, ProteoformRecordNum, 
+                        IsoformId, ChemicalProteoformId 
+                        FROM BiologicalProteoform") %>%
+    as_tibble
+  
+  chemprot <- con %>%
+    RSQLite::dbGetQuery("SELECT Id, MonoisotopicMass, 
+                        AverageMass 
+                        FROM ChemicalProteoform") %>%
+    as_tibble
+  
+  names(chemprot) <- c("ChemicalProteoformId", "MonoisotopicMass", "AverageMass")
+  
+  mass_tbl <- left_join(bioprot, chemprot)
   
   for (i in seq_along(biologicalproteoform$Id)) {
     
     # Retrieve BiologicalProteoformIDs for which IsoformID
     # is a match to this tibble row value
     
-    # bioprotid <<- con %>%
+    # bioprotid <- con %>%
     #   RSQLite::dbGetQuery("SELECT Id, IsoformId 
     #                       FROM BiologicalProteoform") %>%
     #   as_tibble %>%
@@ -87,7 +109,7 @@ read_tdreport <- function(tdreport, fdr_cutoff = 0.01) {
     # Get minimum Q value from among all Q values for this biological
     # proteoform ID then assign it to "Qvalue" column
     
-    min_q_val <<-
+    min_q_val <-
       q_vals$GlobalQvalue[q_vals$ExternalId == biologicalproteoform$Id[i]] %>%
       min(na.rm = TRUE)
     
@@ -96,7 +118,7 @@ read_tdreport <- function(tdreport, fdr_cutoff = 0.01) {
     # Get HitId from q_vals corresponding to lowest Q value hit
     # to be used to find information on data file name
     
-    datafile_hit_id <<- 
+    datafile_hit_id <- 
       q_vals %>%
       filter(GlobalQvalue == min_q_val) %>%
       .$HitId %>% 
@@ -106,7 +128,7 @@ read_tdreport <- function(tdreport, fdr_cutoff = 0.01) {
     # filter down to single value containing datafile number
     # for lowest Q-value hit
     
-    datafile_id <<- con %>%
+    datafile_id <- con %>%
       RSQLite::dbGetQuery("SELECT Id, DataFileId 
                           FROM Hit") %>%
       as_tibble %>% 
@@ -123,15 +145,27 @@ read_tdreport <- function(tdreport, fdr_cutoff = 0.01) {
       as_tibble %>% 
       filter(Id == datafile_id) %>% 
       .$Name
+   
+    # Get masses from mass_tbl and add to appropriate column
     
+    biologicalproteoform$MonoisotopicMass[i] <- 
+      mass_tbl %>% 
+      filter(Id == biologicalproteoform$Id[i]) %>%
+      .$MonoisotopicMass
+    
+    biologicalproteoform$AverageMass[i] <- 
+      mass_tbl %>% 
+      filter(Id == biologicalproteoform$Id[i]) %>%
+      .$AverageMass
+     
   }
   
-  biologicalproteoform_global <<- biologicalproteoform
+  biologicalproteoform_global <- biologicalproteoform
   
   # Filter isoform_id by FDR cutoff value (default 0.01 or 1%)
   # and place results in "output" tibble
   
-  output <<- biologicalproteoform %>% 
+  output <- biologicalproteoform %>% 
     filter(Qvalue < fdr_cutoff)
   
   setwd(here())
@@ -156,19 +190,28 @@ getuniprotinfo <- function(tbl, taxon = NULL, tdreport = TRUE) {
   
   if (tdreport == TRUE) {
     
-    results <- dplyr::select(tbl, c(1, 3, 6, 7))
-    names(results) <- c("UNIPROTKB", "PFR", "Qvalue", "filename")
+    results <- dplyr::select(tbl, c(1, 3, 6, 7, 8, 9))
+    names(results) <- c("UNIPROTKB", "PFR", "Qvalue", "filename",
+                        "MonoisotopicMass", "AverageMass")
     
   } else {
     results <- tibble(UNIPROTKB = pull(tbl, accession_name))
   }
   
-  results_temp <- tibble()
+  results_temp <<- tibble()
   
   for (i in seq_along(pull(tbl, accession_name))) {
+
+    # Create a safe version of UniProt.ws which will not crash
+    # the whole damn program if it fails
     
-    results_temp <- 
-      UniProt.ws::select(taxon,
+    safeselect <- safely(UniProt.ws::select)
+    
+    # For each accession number, pull relevant info from UniProt 
+    # and make a new tibble with just that new line
+    
+    results_newline <<- 
+      safeselect(taxon,
                          keys = pull(tbl, accession_name)[i],
                          columns = c("ENTRY-NAME", "GENES",
                                      "PROTEIN-NAMES", "ORGANISM", 
@@ -176,17 +219,40 @@ getuniprotinfo <- function(tbl, taxon = NULL, tdreport = TRUE) {
                                      "FUNCTION",
                                      "SUBCELLULAR-LOCATIONS", 
                                      "GO-ID"),
-                         keytype = "UNIPROTKB") %>% 
+                 keytype = "UNIPROTKB") 
+    
+    # If safeselect result evaluates to NULL, columns corresponding
+    # to UniProt data are filled with NA
+    
+    if (is.null(results_newline[["result"]]) == TRUE) {
+      
+      
+      results_newline[["result"]] <- 
+        tibble(UNIPROTKB = pull(tbl, accession_name)[i],
+               `ENTRY-NAME` = NA,
+               `GENES` = NA,
+               `PROTEIN-NAMES` = NA,
+               `ORGANISM` = NA, 
+               `ORGANISM-ID` = NA,
+               `SEQUENCE` = NA, 
+               `FUNCTION` = NA,
+               `SUBCELLULAR-LOCATIONS` = NA, 
+               `GO-ID` = NA)
+      
+    }
+    
+    results_temp <-  results_newline[["result"]] %>% 
       as_tibble %>% 
       add_column(PFR = results$PFR[i]) %>% 
-      union_all(results_temp, .)
+      union_all(results_temp, results_newline)  
+    
     
   }
   
   results_global <<- results
   results_temp_global <<- results_temp
   
-  results_after_join <<- left_join(results, results_temp)
+  results_after_join <- left_join(results, results_temp)
   return(results_after_join)
   
 }
@@ -231,10 +297,13 @@ getGOterms <- function(tbl) {
 getlocations <- function(resultslist) {
   
   counts <- tibble(filename = names(resultslist),
+                   proteoform_count = NA,
                    cytosol_count = NA,
                    membrane_count = NA)
   
   for (i in seq_along(resultslist)) {
+    
+    counts$proteoform_count[i] <- resultslist[[i]] %>% .$UNIPROTKB %>% length()
     
     counts$cytosol_count[i] <- sum(str_detect(resultslist[[i]]$GO_subcell_loc, "cytosol"), na.rm = TRUE) +
       sum(str_detect(resultslist[[i]]$GO_subcell_loc, "cytoplasm"), na.rm = TRUE)
@@ -268,19 +337,16 @@ if (length(unique(extension)) > 1) {
   
   print("Reading csv files...")
   proteoformlist  <- filelist %>% map(read_csv)
-  names(proteoformlist) %<>% stringr::str_trunc(30)
-  
+
 } else if (extension[[1]] == "xlsx") {
   
   print("Reading xlsx files...")
   proteoformlist  <- filelist %>% map(read_xlsx)
-  names(proteoformlist) %<>% stringr::str_trunc(30)
-  
+
 } else if (extension[[1]] == "tdReport") {
   
   print("Reading tdReport...")
   proteoformlist <- filelist %>% map(read_tdreport, fdr_cutoff = fdr)
-  names(proteoformlist) %<>% stringr::str_trunc(30)
   tdreport_file <- TRUE
   
 } else {
@@ -309,9 +375,16 @@ print("Getting info from UniProt...")
 
 results_proteoform <- proteoformlist %>% 
   map(getuniprotinfo, taxon = UPtaxon, tdreport = tdreport_file) %>%
-  map(as_tibble) %>%
-  map(getGOterms) %>% 
-  map(addmasses)
+  map(getGOterms)
+
+if (tdreport_file == FALSE) {
+  
+  print("Adding masses according to UniProt sequences...")
+  results_proteoform %<>% map(addmasses)
+  
+} else {
+  print("Skipping addition of average and monoisotopic masses!")
+}
 
 results_proteoform[[length(results_proteoform)+1]] <- getlocations(results_proteoform)
 
@@ -324,32 +397,17 @@ results_proteoform[[length(results_proteoform)+1]] <- getlocations(results_prote
 systime <- format(Sys.time(), "%Y%m%d_%H%M%S")
 resultsname <- glue("{systime}_proteoform_results.xlsx")
 
-names(results_proteoform) %<>% stringr::str_trunc(30)
+names(results_proteoform) <- unlist(filelist)
+
+for (i in seq_along(names(results_proteoform))) {
+  
+  names(results_proteoform)[i] %<>% stringr::str_trunc(28) %>% paste(i, "_", ., sep = "")
+  
+}
+
+setwd(here("output"))
 
 results_proteoform %>%
   writexl::write_xlsx(path = resultsname)
 
-# results_plot <- ggplot() +
-#   # geom_histogram(data = results[[1]], aes(ave_mass),
-#   #                binwidth = 1000, col = "black", fill = "blue", alpha = 0.4) +
-#   # geom_histogram(data = results[[2]], aes(ave_mass),
-#   #                binwidth = 1000, col = "black", fill = "red", alpha = 0.4) +
-#   # geom_histogram(data = results[[3]], aes(ave_mass),
-#   #                binwidth = 1000, col = "black", fill = "yellow", alpha = 0.4) +
-#   geom_freqpoly(data = results[[1]], aes(ave_mass), color = "red", binwidth = 1000) +
-#   geom_freqpoly(data = results[[2]], aes(ave_mass), color = "blue", binwidth = 1000) +
-#   geom_freqpoly(data = results[[3]], aes(ave_mass), color = "dark green", binwidth = 1000) +
-#   geom_freqpoly(data = results[[4]], aes(ave_mass), color = "black", binwidth = 1000) +
-#   theme_minimal()
-
-
-# bup <- UniProt.ws::select(up,
-#                    keys = "P60624",
-#                    columns = c("ENTRY-NAME", "GENEID",
-#                                "PROTEIN-NAMES", "ORGANISM", 
-#                                "ORGANISM-ID", "SEQUENCE", 
-#                                "FUNCTION",
-#                                "SUBCELLULAR-LOCATIONS", 
-#                                "GO-ID"),
-#                    keytype = "UNIPROTKB") %>% 
-#   as_tibble
+setwd(here())
