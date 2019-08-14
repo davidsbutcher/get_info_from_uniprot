@@ -13,13 +13,22 @@ library(tictoc)
 library(glue)
 library(rstudioapi)
 library(RPushbullet)
+library(magrittr)
 
 setwd(here())
 
 tic()
+
 source("01_get_protein_info.R")
 source("02_get_proteoform_info.R")
 source("03_output_plots.R")
-tictoc_time <- capture.output(toc())
 
-pbPost("note", "Analysis Finished", tictoc_time) 
+totaltime <- capture.output(toc()) %>%
+  str_extract("[0-9]+") %>%
+  as.numeric %>% 
+  `/`(60) %>% round(digits = 2)
+
+print(glue("Elapsed time: {totaltime} min"))
+
+pbPost("note", "R Analysis Finished",
+       glue("Elapsed time: {totaltime} min")) 

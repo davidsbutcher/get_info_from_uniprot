@@ -20,8 +20,11 @@ library(DBI)
 library(zeallot)
 library(GO.db)
 library(tools)
+library(progress)
 
 # Initial Parameters --------------------------------------------------------------------------
+
+filedir <- "Z:/ICR/David Butcher/TDReports/201907_EcoliMG1655WCL_msnfills_2-6"
 
 # Specify false discovery rate to use for
 # rejection of hits (as decimal) when using a
@@ -33,6 +36,11 @@ fdr <- 0.01
 # 83333 -> E. coli K12
 
 UPtaxon <- UniProt.ws(83333)
+
+# Need to run this command for furrr
+
+# plan(multisession(workers = 4))
+
 
 # Functions -----------------------------------------------------------------------------------
 
@@ -54,17 +62,32 @@ kickout <- function(list) {
   return(list)
 }
 
-read_tdreport <- function(tdreport, fdr_cutoff = 0.01) {
+read_tdreport <- function(tdreport, fdr_cutoff = 0.01, file_dir = getwd()) {
   
-  setwd(here("input"))
+  setwd(file_dir)
+  
+  message(glue("Establishing connection to {tdreport} in {file_dir}.."))
   
   #Establish database connection. Keep trying until it works!
    
-  while(exists("con") == FALSE) {
+  safe_dbConnect <- safely(dbConnect)
   
-  con <- dbConnect(RSQLite::SQLite(), ":memory:", dbname = tdreport)
-
+  safecon <- safe_dbConnect(RSQLite::SQLite(), ":memory:", dbname = tdreport)
+  
+  if (is.null(safecon[["result"]]) == TRUE) message("Connection failed, trying again!")
+  
+  iteration_num <- 1
+  
+  while (is.null(safecon[["result"]]) == TRUE) {
+   
+    iteration_num <- iteration_num + 1
+    
+    message(glue("\nTrying to establish database connection, attempt {iteration_num}"))
+    safecon <- safe_dbConnect(RSQLite::SQLite(), ":memory:", dbname = tdreport)
+    
   }
+  
+  con <- safecon[["result"]]
   
   # Initialize the tibble where we'll be dropping our most 
   # important data, add NA columns for later use
@@ -110,7 +133,7 @@ read_tdreport <- function(tdreport, fdr_cutoff = 0.01) {
     
     if (qValueExists == TRUE) {
       
-      print("Q value found, inserting in output table")
+      print(glue("Q value found, inserting in output table, row {i}"))
       
       min_q_val <-
         q_vals$GlobalQvalue[q_vals$ExternalId == isoform_id$Id[i]] %>%
@@ -203,7 +226,7 @@ read_tdreport <- function(tdreport, fdr_cutoff = 0.01) {
   
   output_global <<- output
   
-  print("read_tdreport Finished!")
+  message("read_tdreport Finished!")
   Sys.sleep(0.2)
   
   return(output)
@@ -212,7 +235,7 @@ read_tdreport <- function(tdreport, fdr_cutoff = 0.01) {
 
 getuniprotinfo <- function(tbl, taxon = NULL, tdreport = TRUE) {
   
-  print("Retrieving info from UniProt...")
+  message("Retrieving info for from UniProt...")
   
   # Find column in the input tibble which has "accession"
   # in it and use it to get info from UniProt
@@ -234,27 +257,36 @@ getuniprotinfo <- function(tbl, taxon = NULL, tdreport = TRUE) {
   
   results_temp <- tibble()
   
+  # Prepare progress bar
+  
+  pb <- progress_bar$new(
+    format = "  Accessing UniProt [:bar] :percent eta: :eta :spin",
+    total = length(pull(tbl, accession_name)),
+    clear = FALSE, width= 60)
+  
   for (i in seq_along(pull(tbl, accession_name))) {
     
-    results_temp <- 
-      UniProt.ws::select(taxon,
-                         keys = pull(tbl, accession_name)[i],
-                         columns = c("ENTRY-NAME", "GENES",
-                                     "PROTEIN-NAMES", "ORGANISM", 
-                                     "ORGANISM-ID", "SEQUENCE", 
-                                     "FUNCTION",
-                                     "SUBCELLULAR-LOCATIONS", 
-                                     "GO-ID"),
-                         keytype = "UNIPROTKB") %>% 
-      as_tibble %>% 
-      union_all(results_temp, .)
+    suppressMessages(results_temp <- 
+                       UniProt.ws::select(taxon,
+                                          keys = pull(tbl, accession_name)[i],
+                                          columns = c("ENTRY-NAME", "GENES",
+                                                      "PROTEIN-NAMES", "ORGANISM", 
+                                                      "ORGANISM-ID", "SEQUENCE", 
+                                                      "FUNCTION",
+                                                      "SUBCELLULAR-LOCATIONS", 
+                                                      "GO-ID"),
+                                          keytype = "UNIPROTKB") %>% 
+                       as_tibble %>% 
+                       union_all(results_temp, .))
+    
+    pb$tick()
     
   }
   
   results_after_join <- left_join(results, results_temp)
   return(results_after_join)
   
-  print("Finished retrieving info from UniProt!")
+  message("Finished retrieving info from UniProt!")
   
 }
 
@@ -274,7 +306,7 @@ getGOterms <- function(tbl) {
   library(magrittr)
   library(GO.db)
 
-  print("Getting GO subcellular locations...")
+  message("Getting GO subcellular locations...")
   
   temptbl <- tibble()
   
@@ -323,10 +355,10 @@ getlocations <- function(resultslist) {
 # name includes the word "accession" somewhere. Case doesn't matter
 # but spelling does.
 
-filelist <- here("input") %>%
+filelist <- filedir %>%
   list.files  %>% as.list %>% kickout
 
-setwd(here("input"))
+setwd(filedir)
 
 extension <- filelist %>% map(tools::file_ext)
 
@@ -340,18 +372,18 @@ if (length(unique(extension)) > 1) {
   
 } else if (extension[[1]] == "csv") {
   
-  print("Reading csv files...")
+  message("Reading csv files...")
   proteinlist  <- filelist %>% map(read_csv)
   
 } else if (extension[[1]] == "xlsx") {
   
-  print("Reading xlsx files...")
+  message("Reading xlsx files...")
   proteinlist  <- filelist %>% map(read_xlsx)
   
 } else if (extension[[1]] == "tdReport") {
   
-  print("Reading tdReport...")
-  proteinlist <- filelist %>% map(read_tdreport, fdr_cutoff = fdr)
+  message("Reading tdReport...")
+  proteinlist <- filelist %>% map(read_tdreport, fdr_cutoff = fdr, file_dir = filedir)
   tdreport_file <- TRUE
   
 } else {
@@ -373,13 +405,12 @@ go_locs <- read_tsv("QuickGO_annotations_20190708.tsv") %>%
 
 # Access UniProt ------------------------------------------------------------------------------
 
-print("Getting info from UniProt...")
-
 # keytypes <- UniProt.ws::keytypes(UPtaxon) %>% enframe
 # columns <- UniProt.ws::columns(UPtaxon) %>% enframe
 
 results_protein <- proteinlist %>% 
-  map(getuniprotinfo, taxon = UPtaxon, tdreport = tdreport_file) %>%
+  map(getuniprotinfo, taxon = UPtaxon,
+             tdreport = tdreport_file) %>%
   map(as_tibble) %>%
   map(getGOterms) %>% 
   map(addmasses)

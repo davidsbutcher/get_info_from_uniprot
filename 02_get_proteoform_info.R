@@ -21,6 +21,7 @@ library(RSQLite)
 library(DBI)
 library(zeallot)
 library(GO.db)
+library(progress)
 
 # Initial Parameters --------------------------------------------------------------------------
 
@@ -35,12 +36,16 @@ fdr <- 0.01
 
 UPtaxon <- UniProt.ws(83333)
 
+# Need to run this command for furrr
+
+# plan(multisession(workers = 4))
+
 # Functions -----------------------------------------------------------------------------------
 
 kickout <- function(list) {
   
   # This function removes any element from the list of input files
-  # (from root/input) which does not have one of the allowed
+  # which does not have one of the allowed
   # extensions
   
   allowed_ext <- c("tdReport", "csv", "xlsx")
@@ -55,9 +60,9 @@ kickout <- function(list) {
   return(list)
 }
 
-read_tdreport <- function(tdreport, proteinlist, fdr_cutoff = 0.01) {
+read_tdreport <- function(tdreport, proteinlist, fdr_cutoff = 0.01, file_dir = NULL) {
   
-  setwd(here("input"))
+  setwd(file_dir)
   
   print("Did protein list make it in okay???")
   print(proteinlist)
@@ -66,11 +71,20 @@ read_tdreport <- function(tdreport, proteinlist, fdr_cutoff = 0.01) {
   
   #Establish database connection. Keep trying until it works!
   
-  while(exists("con") == FALSE) {
+  safe_dbConnect <- safely(dbConnect)
   
-  con <- dbConnect(RSQLite::SQLite(), ":memory:", dbname = tdreport)
+  safecon <- safe_dbConnect(RSQLite::SQLite(), ":memory:", dbname = tdreport)
   
+  iteration_num <- 1
+  
+  while (is.null(safecon[["result"]]) == TRUE) {
+    
+    print(glue("\nTrying to establish database connection, attempt {iteration_num}"))
+    safecon <- safe_dbConnect(RSQLite::SQLite(), ":memory:", dbname = tdreport)
+    
   }
+  
+  con <- safecon[["result"]]
   
   # Initialize the tibble where we'll be dropping our most 
   # important data, add NA columns for later use
@@ -276,8 +290,15 @@ getuniprotinfo <- function(tbl, taxon = NULL, tdreport = TRUE) {
   
   results_temp <- tibble()
   
+  # Prepare progress bar
+  
+  pb <- progress_bar$new(
+    format = "  Accessing UniProt [:bar] :percent eta: :eta :spin",
+    total = length(pull(tbl, accession_name)),
+    clear = FALSE, width= 60)
+  
   for (i in seq_along(pull(tbl, accession_name))) {
-
+    
     # Create a safe version of UniProt.ws which will not crash
     # the whole damn program if it fails
     
@@ -286,16 +307,16 @@ getuniprotinfo <- function(tbl, taxon = NULL, tdreport = TRUE) {
     # For each accession number, pull relevant info from UniProt 
     # and make a new tibble with just that new line
     
-    results_newline <- 
-      safeselect(taxon,
-                         keys = pull(tbl, accession_name)[i],
-                         columns = c("ENTRY-NAME", "GENES",
-                                     "PROTEIN-NAMES", "ORGANISM", 
-                                     "ORGANISM-ID", "SEQUENCE", 
-                                     "FUNCTION",
-                                     "SUBCELLULAR-LOCATIONS", 
-                                     "GO-ID"),
-                 keytype = "UNIPROTKB") 
+    suppressMessages(results_newline <- 
+                       safeselect(taxon,
+                                  keys = pull(tbl, accession_name)[i],
+                                  columns = c("ENTRY-NAME", "GENES",
+                                              "PROTEIN-NAMES", "ORGANISM", 
+                                              "ORGANISM-ID", "SEQUENCE", 
+                                              "FUNCTION",
+                                              "SUBCELLULAR-LOCATIONS", 
+                                              "GO-ID"),
+                                  keytype = "UNIPROTKB"))
     
     # If safeselect result evaluates to NULL, columns corresponding
     # to UniProt data are filled with NA
@@ -322,7 +343,7 @@ getuniprotinfo <- function(tbl, taxon = NULL, tdreport = TRUE) {
       add_column(PFR = results$PFR[i]) %>% 
       union_all(results_temp, results_newline)  
     
-    
+    pb$tick()
   }
   
   results_global <<- results
@@ -407,10 +428,10 @@ getlocations <- function(resultslist) {
 # name includes the word "accession" somewhere. Case doesn't matter
 # but spelling does.
 
-filelist <- here("input") %>%
+filelist <- filedir %>%
   list.files  %>% as.list %>% kickout
 
-setwd(here("input"))
+setwd(filedir)
 
 extension <- filelist %>% map(tools::file_ext)
 
@@ -435,7 +456,9 @@ if (length(unique(extension)) > 1) {
 } else if (extension[[1]] == "tdReport") {
   
   print("Reading tdReport...")
-  proteoformlist <- filelist %>% map2(., proteinlist, read_tdreport, fdr_cutoff = fdr)
+  proteoformlist <- filelist %>% map2(., proteinlist, read_tdreport,
+                                      fdr_cutoff = fdr,
+                                      file_dir = filedir)
   tdreport_file <- TRUE
   
 } else {
@@ -463,7 +486,8 @@ print("Getting info from UniProt...")
 # columns <- UniProt.ws::columns(UPtaxon) %>% enframe
 
 results_proteoform <- proteoformlist %>% 
-  map(getuniprotinfo, taxon = UPtaxon, tdreport = tdreport_file) %>%
+  map(getuniprotinfo, taxon = UPtaxon,
+             tdreport = tdreport_file) %>%
   map(getGOterms)
 
 if (tdreport_file == FALSE) {
