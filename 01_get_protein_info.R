@@ -9,6 +9,7 @@ library(here)
 library(glue)
 library(svMisc)
 library(tidyverse)
+library(furrr)
 library(Peptides)
 library(magrittr)
 library(writexl)
@@ -18,6 +19,7 @@ library(RSQLite)
 library(DBI)
 library(zeallot)
 library(GO.db)
+library(tools)
 
 # Initial Parameters --------------------------------------------------------------------------
 
@@ -34,13 +36,35 @@ UPtaxon <- UniProt.ws(83333)
 
 # Functions -----------------------------------------------------------------------------------
 
+kickout <- function(list) {
+  
+  # This function removes any element from the list of input files
+  # (from root/input) which does not have one of the allowed
+  # extensions
+  
+  allowed_ext <- c("tdReport", "csv", "xlsx")
+  
+  for (i in rev(seq_along(list))) {
+    
+    if (!(tools::file_ext(list[[i]]) %in% allowed_ext)) {
+      list[[i]] <- NULL 
+    }
+  }
+  
+  return(list)
+}
+
 read_tdreport <- function(tdreport, fdr_cutoff = 0.01) {
   
   setwd(here("input"))
   
-  #Establish database connection
+  #Establish database connection. Keep trying until it works!
+   
+  while(exists("con") == FALSE) {
   
   con <- dbConnect(RSQLite::SQLite(), ":memory:", dbname = tdreport)
+
+  }
   
   # Initialize the tibble where we'll be dropping our most 
   # important data, add NA columns for later use
@@ -62,6 +86,9 @@ read_tdreport <- function(tdreport, fdr_cutoff = 0.01) {
   
   for (i in seq_along(isoform_id$Id)) {
     
+    glue("\nFinding matching Q values for isoform_id row {i}...") %>% 
+      print
+    
     # Retrieve BiologicalProteoformIDs for which IsoformID
     # is a match to this tibble row value
     
@@ -73,9 +100,9 @@ read_tdreport <- function(tdreport, fdr_cutoff = 0.01) {
     
     # Check to see if at least one corresponding Q value
     # can be found for the corresponding Isoform/ExternalId
-    # inthe q_vals tibble
+    # in the q_vals tibble and if there is at least one non-NA value
     
-    qValueExists <- any(q_vals$ExternalId == isoform_id$Id[i])
+    qValueExists <- any(!is.na(q_vals$GlobalQvalue[q_vals$ExternalId == isoform_id$Id[i]]))
     
     # If there is a Q value, get minimum Q value from among all Q values
     # for this Isoform ID then assign it to "Qvalue" column. Otherwise
@@ -83,11 +110,20 @@ read_tdreport <- function(tdreport, fdr_cutoff = 0.01) {
     
     if (qValueExists == TRUE) {
       
+      print("Q value found, inserting in output table")
+      
       min_q_val <-
         q_vals$GlobalQvalue[q_vals$ExternalId == isoform_id$Id[i]] %>%
         min(na.rm = TRUE)
+    
+      # Is there at least one non-NA value the group of Qvalues corresponding
+      # to this ExternalID? If there are, find minimum among them and set it to min_q_val
+        
+      # if (any(is.na(q_vals$GlobalQvalue[q_vals$ExternalId == isoform_id$Id[i]]) == FALSE)) {
       
     } else {
+      
+      print("***NO VALID Q VALUE FOUND, inserting garbage value***")
       
       min_q_val <- 1000000
       
@@ -116,8 +152,7 @@ read_tdreport <- function(tdreport, fdr_cutoff = 0.01) {
     # filter down to single value containing datafile number
     # for lowest Q-value hit
     
-    
-    if (qValueExists == TRUE) {
+    if (qValueExists == TRUE & is.na(datafile_hit_id) == FALSE) {
       
       datafile_id <- con %>%
         RSQLite::dbGetQuery("SELECT Id, DataFileId 
@@ -136,7 +171,7 @@ read_tdreport <- function(tdreport, fdr_cutoff = 0.01) {
     # Lookup datafile_id in "Id" column of "Datafile" table
     # to get corresponding file name
     
-    if (qValueExists == TRUE) {
+    if (qValueExists == TRUE & is.na(datafile_id) == FALSE) {
       
       isoform_id$filename[i] <- con %>%
         RSQLite::dbGetQuery("SELECT Id, Name 
@@ -155,6 +190,8 @@ read_tdreport <- function(tdreport, fdr_cutoff = 0.01) {
   # Filter isoform_id by FDR cutoff value (default 0.01 or 1%)
   # and place results in "output" tibble
   
+  isoform_id_global <<- isoform_id
+  
   output <- isoform_id %>% 
     filter(Qvalue < fdr_cutoff)
   
@@ -164,11 +201,18 @@ read_tdreport <- function(tdreport, fdr_cutoff = 0.01) {
   
   dbDisconnect(con)
   
+  output_global <<- output
+  
+  print("read_tdreport Finished!")
+  Sys.sleep(0.2)
+  
   return(output)
   
 }
 
 getuniprotinfo <- function(tbl, taxon = NULL, tdreport = TRUE) {
+  
+  print("Retrieving info from UniProt...")
   
   # Find column in the input tibble which has "accession"
   # in it and use it to get info from UniProt
@@ -209,6 +253,8 @@ getuniprotinfo <- function(tbl, taxon = NULL, tdreport = TRUE) {
   
   results_after_join <- left_join(results, results_temp)
   return(results_after_join)
+  
+  print("Finished retrieving info from UniProt!")
   
 }
 
@@ -273,12 +319,12 @@ getlocations <- function(resultslist) {
 # Read Data Files -----------------------------------------------------------------------------
 
 # Files are read from subdirectory called "input". Data files must
-# be in csv or xlsx format and have a column of UniProt IDs whose 
+# be in csv, xlsx, pr TDreport format and have a column of UniProt IDs whose 
 # name includes the word "accession" somewhere. Case doesn't matter
 # but spelling does.
 
 filelist <- here("input") %>%
-  list.files %>% as.list
+  list.files  %>% as.list %>% kickout
 
 setwd(here("input"))
 
@@ -288,16 +334,20 @@ if (length(unique(extension)) > 1) {
   
   stop("More than one kind of file. Try again.")
   
+} else if (length(extension) == 0) {
+  
+  stop("No acceptable input files. Only tdReport, csv, and xlsx allowed.")
+  
 } else if (extension[[1]] == "csv") {
   
   print("Reading csv files...")
   proteinlist  <- filelist %>% map(read_csv)
-
+  
 } else if (extension[[1]] == "xlsx") {
   
   print("Reading xlsx files...")
   proteinlist  <- filelist %>% map(read_xlsx)
-
+  
 } else if (extension[[1]] == "tdReport") {
   
   print("Reading tdReport...")

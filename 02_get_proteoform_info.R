@@ -2,6 +2,8 @@
 # This script truncates the filenames after 30
 # characters to use as Excel sheet names.
 
+# Run 01_get_protein_info first!!
+
 # Packages ------------------------------------------------------------------------------------
 
 library(UniProt.ws)
@@ -9,6 +11,7 @@ library(here)
 library(glue)
 library(svMisc)
 library(tidyverse)
+library(furrr)
 library(Peptides)
 library(magrittr)
 library(writexl)
@@ -34,13 +37,40 @@ UPtaxon <- UniProt.ws(83333)
 
 # Functions -----------------------------------------------------------------------------------
 
-read_tdreport <- function(tdreport, fdr_cutoff = 0.01) {
+kickout <- function(list) {
+  
+  # This function removes any element from the list of input files
+  # (from root/input) which does not have one of the allowed
+  # extensions
+  
+  allowed_ext <- c("tdReport", "csv", "xlsx")
+  
+  for (i in rev(seq_along(list))) {
+    
+    if (!(tools::file_ext(list[[i]]) %in% allowed_ext)) {
+      list[[i]] <- NULL 
+    }
+  }
+  
+  return(list)
+}
+
+read_tdreport <- function(tdreport, proteinlist, fdr_cutoff = 0.01) {
   
   setwd(here("input"))
   
-  #Establish database connection
+  print("Did protein list make it in okay???")
+  print(proteinlist)
+  
+  Sys.sleep(3)
+  
+  #Establish database connection. Keep trying until it works!
+  
+  while(exists("con") == FALSE) {
   
   con <- dbConnect(RSQLite::SQLite(), ":memory:", dbname = tdreport)
+  
+  }
   
   # Initialize the tibble where we'll be dropping our most 
   # important data, add NA columns for later use
@@ -54,7 +84,7 @@ read_tdreport <- function(tdreport, fdr_cutoff = 0.01) {
     add_column(filename = NA) %>% 
     add_column(MonoisotopicMass = NA) %>% 
     add_column(AverageMass = NA)
-    
+  
   
   #Get accession numbers to correlate with isoform IDs later
   
@@ -145,7 +175,7 @@ read_tdreport <- function(tdreport, fdr_cutoff = 0.01) {
       as_tibble %>% 
       filter(Id == datafile_id) %>% 
       .$Name
-   
+    
     # Get masses from mass_tbl and add to appropriate column
     
     biologicalproteoform$MonoisotopicMass[i] <- 
@@ -157,16 +187,55 @@ read_tdreport <- function(tdreport, fdr_cutoff = 0.01) {
       mass_tbl %>% 
       filter(Id == biologicalproteoform$Id[i]) %>%
       .$AverageMass
-     
+    
   }
-  
-  biologicalproteoform_global <- biologicalproteoform
   
   # Filter isoform_id by FDR cutoff value (default 0.01 or 1%)
   # and place results in "output" tibble
   
-  output <- biologicalproteoform %>% 
+  biologicalproteoform %<>% 
     filter(Qvalue < fdr_cutoff)
+  
+  biologicalproteoform_global1 <<- biologicalproteoform
+  
+  revseq <- rev(seq_along(biologicalproteoform$AccessionNumber))
+  
+  for (i in seq_along(biologicalproteoform$AccessionNumber)) {
+    
+    print(glue("\n\n\nBegin iteration {i} of loop.."))
+    
+    accessiontocheck <<- biologicalproteoform$AccessionNumber[revseq[i]]
+    
+    if (accessiontocheck %in% proteinlist$AccessionNumber == TRUE) {
+      
+      qvaltocheck <<- proteinlist %>% filter(AccessionNumber == accessiontocheck) %>% .$Qvalue
+      
+    } else {
+      
+      qvaltocheck <<- NA 
+      
+    }
+    
+    if (is.na(qvaltocheck) == FALSE & qvaltocheck > fdr_cutoff) {
+      
+      biologicalproteoform %<>% .[-revseq[i],]
+      print(glue("Q value above FDR, erasing proteoform {i}..."))
+  
+    } else if (is.na(qvaltocheck) == TRUE) {
+    
+      biologicalproteoform %<>% .[-revseq[i],]
+      print(glue("Q value is NA, erasing proteoform {i}..."))
+      
+    } else {
+     
+      print(glue("**NOT** erasing proteoform {i}!"))
+       
+    }
+    
+    print (biologicalproteoform)
+    print(glue("End of iteration {i} of loop."))
+
+  }
   
   setwd(here())
   
@@ -174,7 +243,12 @@ read_tdreport <- function(tdreport, fdr_cutoff = 0.01) {
   
   dbDisconnect(con)
   
-  return(output)
+  print("Loopp finished")
+  print(biologicalproteoform)
+  
+  biologicalproteoform_global2 <<- biologicalproteoform
+  
+  return(biologicalproteoform)
 }
 
 getuniprotinfo <- function(tbl, taxon = NULL, tdreport = TRUE) {
@@ -198,7 +272,9 @@ getuniprotinfo <- function(tbl, taxon = NULL, tdreport = TRUE) {
     results <- tibble(UNIPROTKB = pull(tbl, accession_name))
   }
   
-  results_temp <<- tibble()
+  results_init_global <<- results
+  
+  results_temp <- tibble()
   
   for (i in seq_along(pull(tbl, accession_name))) {
 
@@ -210,7 +286,7 @@ getuniprotinfo <- function(tbl, taxon = NULL, tdreport = TRUE) {
     # For each accession number, pull relevant info from UniProt 
     # and make a new tibble with just that new line
     
-    results_newline <<- 
+    results_newline <- 
       safeselect(taxon,
                          keys = pull(tbl, accession_name)[i],
                          columns = c("ENTRY-NAME", "GENES",
@@ -250,9 +326,13 @@ getuniprotinfo <- function(tbl, taxon = NULL, tdreport = TRUE) {
   }
   
   results_global <<- results
+  
   results_temp_global <<- results_temp
   
-  results_after_join <- left_join(results, results_temp)
+  results_after_join <- left_join(results, results_temp, by = "PFR")
+  
+  results_after_join_global <<- results_after_join
+  
   return(results_after_join)
   
 }
@@ -283,13 +363,18 @@ getGOterms <- function(tbl) {
   
   for (i in seq_along(tbl$`GO-ID`)) {
     
+    if (is.na(temptbl$`GO-ID`[i]) == FALSE) {
+    
     temptbl$GO_term[i] <- unlist(strsplit(temptbl$`GO-ID`[i], ";")) %>% 
       trimws() %>% Term() %>% paste(collapse = "; ")
     
     temptbl$GO_subcell_loc[i] <- unlist(strsplit(temptbl$`GO-ID`[i], ";")) %>%
       trimws() %>% Term() %>% .[. %in% go_locs] %>% paste(collapse = "; ")
     
+    }
   }
+  
+  temptbl_global <<- temptbl
   
   return(temptbl)
 }
@@ -323,7 +408,7 @@ getlocations <- function(resultslist) {
 # but spelling does.
 
 filelist <- here("input") %>%
-  list.files %>% as.list
+  list.files  %>% as.list %>% kickout
 
 setwd(here("input"))
 
@@ -332,6 +417,10 @@ extension <- filelist %>% map(tools::file_ext)
 if (length(unique(extension)) > 1) {
   
   stop("More than one kind of file. Try again.")
+  
+} else if (length(extension) == 0) {
+  
+  stop("No acceptable input files. Only tdReport, csv, and xlsx allowed.")
   
 } else if (extension[[1]] == "csv") {
   
@@ -346,7 +435,7 @@ if (length(unique(extension)) > 1) {
 } else if (extension[[1]] == "tdReport") {
   
   print("Reading tdReport...")
-  proteoformlist <- filelist %>% map(read_tdreport, fdr_cutoff = fdr)
+  proteoformlist <- filelist %>% map2(., proteinlist, read_tdreport, fdr_cutoff = fdr)
   tdreport_file <- TRUE
   
 } else {

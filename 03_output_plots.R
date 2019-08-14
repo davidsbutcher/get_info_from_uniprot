@@ -83,10 +83,12 @@ ggplot() +
 # Just in case I want to see an image from a particular run of results
 
 systime <- format(Sys.time(), "%Y%m%d_%H%M%S")
-resultsname <- glue("{systime}_workspace_image.RData")
 
 setwd(here("output/workspace_images"))
-save.image(resultsname)
+
+glue("{systime}_workspace_image.RData") %>% 
+  save.image()
+
 setwd(here())
 
 
