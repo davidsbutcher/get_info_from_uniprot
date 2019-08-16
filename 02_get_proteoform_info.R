@@ -38,7 +38,7 @@ UPtaxon <- UniProt.ws(83333)
 
 # Need to run this command for furrr
 
-# plan(multisession(workers = 4))
+plan(multisession(workers = 10))
 
 # Functions -----------------------------------------------------------------------------------
 
@@ -73,14 +73,18 @@ read_tdreport <- function(tdreport, proteinlist, fdr_cutoff = 0.01, file_dir = N
   
   safe_dbConnect <- safely(dbConnect)
   
-  safecon <- safe_dbConnect(RSQLite::SQLite(), ":memory:", dbname = tdreport)
+  safecon <- safe_dbConnect(RSQLite::SQLite(), ":memory:",
+                            dbname = tdreport,
+                            synchronous = NULL)
   
   iteration_num <- 1
   
   while (is.null(safecon[["result"]]) == TRUE) {
     
     print(glue("\nTrying to establish database connection, attempt {iteration_num}"))
-    safecon <- safe_dbConnect(RSQLite::SQLite(), ":memory:", dbname = tdreport)
+    safecon <- safe_dbConnect(RSQLite::SQLite(), ":memory:",
+                              dbname = tdreport,
+                              synchronous = NULL)
     
   }
   
@@ -429,11 +433,12 @@ getlocations <- function(resultslist) {
 # but spelling does.
 
 filelist <- filedir %>%
-  list.files  %>% as.list %>% kickout
+  list.files(recursive = T, include.dirs = T) %>%
+  as.list %>% kickout
 
 setwd(filedir)
 
-extension <- filelist %>% map(tools::file_ext)
+extension <- filelist %>% future_map(tools::file_ext)
 
 if (length(unique(extension)) > 1) {
   
@@ -446,17 +451,17 @@ if (length(unique(extension)) > 1) {
 } else if (extension[[1]] == "csv") {
   
   print("Reading csv files...")
-  proteoformlist  <- filelist %>% map(read_csv)
+  proteoformlist  <- filelist %>% future_map(read_csv)
 
 } else if (extension[[1]] == "xlsx") {
   
   print("Reading xlsx files...")
-  proteoformlist  <- filelist %>% map(read_xlsx)
+  proteoformlist  <- filelist %>% future_map(read_xlsx)
 
 } else if (extension[[1]] == "tdReport") {
   
   print("Reading tdReport...")
-  proteoformlist <- filelist %>% map2(., proteinlist, read_tdreport,
+  proteoformlist <- filelist %>% future_map2(., proteinlist, read_tdreport,
                                       fdr_cutoff = fdr,
                                       file_dir = filedir)
   tdreport_file <- TRUE
@@ -486,14 +491,14 @@ print("Getting info from UniProt...")
 # columns <- UniProt.ws::columns(UPtaxon) %>% enframe
 
 results_proteoform <- proteoformlist %>% 
-  map(getuniprotinfo, taxon = UPtaxon,
+  future_map(getuniprotinfo, taxon = UPtaxon,
              tdreport = tdreport_file) %>%
-  map(getGOterms)
+  future_map(getGOterms)
 
 if (tdreport_file == FALSE) {
   
   print("Adding masses according to UniProt sequences...")
-  results_proteoform %<>% map(addmasses)
+  results_proteoform %<>% future_map(addmasses)
   
 } else {
   print("Skipping addition of average and monoisotopic masses!")
@@ -511,10 +516,12 @@ systime <- format(Sys.time(), "%Y%m%d_%H%M%S")
 resultsname <- glue("{systime}_proteoform_results.xlsx")
 
 names(results_proteoform) <- unlist(filelist)
+names(results_proteoform)[length(results_proteoform)] <- "SUMMARY"
 
 for (i in seq_along(names(results_proteoform))) {
   
-  names(results_proteoform)[i] %<>% stringr::str_trunc(28) %>% paste(i, "_", ., sep = "")
+  names(results_proteoform)[i] <- str_replace_all(names(results_proteoform[i]), "[:punct:]", "")
+  names(results_proteoform)[i] %<>% stringr::str_trunc(28, "left") %>% paste(i, "_", ., sep = "")
   
 }
 

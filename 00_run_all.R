@@ -31,4 +31,4 @@ totaltime <- capture.output(toc()) %>%
 print(glue("Elapsed time: {totaltime} min"))
 
 pbPost("note", "R Analysis Finished",
-       glue("Elapsed time: {totaltime} min")) 
+       glue("Elapsed time: {totaltime} min \nDir: {filedir}")) 
