@@ -8,14 +8,58 @@
 # the word "Accession" SOMEWHERE. Capitalization doesn't
 # matter but spelling does. 
 
+# Packages ------------------------------------------------------------------------------------
+
+library(UniProt.ws)
 library(here)
+library(glue)
+library(svMisc)
+library(tidyverse)
+library(furrr)
+library(Peptides)
+library(magrittr)
+library(writexl)
+library(readxl)
+library(beepr)
+library(RSQLite)
+library(DBI)
+library(zeallot)
+library(GO.db)
+library(tools)
+library(progress)
 library(tictoc)
 library(glue)
 library(rstudioapi)
 library(RPushbullet)
 library(magrittr)
+library(ggpubr)
+
+# Initialize Parameters -----------------------------------------------------------------------
 
 setwd(here())
+
+## ADD DIRECTORY/DIRECTORIES CONTAINING FILES TO SCAN!
+
+filedir <- c("Z:/ICR/David Butcher/TDReports/201907_EcoliMG1655WCL_msnfills_2-6")
+
+# Specify false discovery rate to use for
+# rejection of hits (as decimal) when using a
+# tdReport as input - 0.01 is 1% FDR
+
+fdr <- 0.01
+
+# Specify UniProt taxon number to search.
+# 83333 -> E. coli K12
+
+UPtaxon <- UniProt.ws(83333)
+
+# Need to run this command for furrr. If 10
+# is too many sessions for your system try 5
+
+plan(multisession(workers = 10))
+
+
+# Run Scripts ---------------------------------------------------------------------------------
 
 tic()
 

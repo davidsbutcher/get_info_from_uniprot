@@ -2,46 +2,6 @@
 # This script truncates the filenames after 30
 # characters to use as Excel sheet names.
 
-# Packages ------------------------------------------------------------------------------------
-
-library(UniProt.ws)
-library(here)
-library(glue)
-library(svMisc)
-library(tidyverse)
-library(furrr)
-library(Peptides)
-library(magrittr)
-library(writexl)
-library(readxl)
-library(beepr)
-library(RSQLite)
-library(DBI)
-library(zeallot)
-library(GO.db)
-library(tools)
-library(progress)
-
-# Initial Parameters --------------------------------------------------------------------------
-
-filedir <- c("Z:/ICR/David Butcher/TDReports/20190725_EcoliMG1655WCL_M9-J-20190404")
-
-# Specify false discovery rate to use for
-# rejection of hits (as decimal) when using a
-# tdReport as input - 0.01 is 1% FDR
-
-fdr <- 0.01
-
-# Specify UniProt taxon number to search.
-# 83333 -> E. coli K12
-
-UPtaxon <- UniProt.ws(83333)
-
-# Need to run this command for furrr
-
-plan(multisession(workers = 10))
-
-
 # Functions -----------------------------------------------------------------------------------
 
 kickout <- function(list) {

@@ -1,10 +1,5 @@
 # Run 01_get_protein_info and 02_get_proteoform info first!
 
-
-# Packages ------------------------------------------------------------------------------------
-
-library(ggpubr)
-
 # Make ggplots --------------------------------------------------------------------------------
 
 for (i in head(seq_along(results_protein), -1)) {

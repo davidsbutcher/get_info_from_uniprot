@@ -4,42 +4,6 @@
 
 # Run 01_get_protein_info first!!
 
-# Packages ------------------------------------------------------------------------------------
-
-library(UniProt.ws)
-library(here)
-library(glue)
-library(svMisc)
-library(tidyverse)
-library(furrr)
-library(Peptides)
-library(magrittr)
-library(writexl)
-library(readxl)
-library(beepr)
-library(RSQLite)
-library(DBI)
-library(zeallot)
-library(GO.db)
-library(progress)
-
-# Initial Parameters --------------------------------------------------------------------------
-
-# Specify false discovery rate to use for
-# rejection of hits (as decimal) when using a
-# tdReport as input - 0.01 is 1% FDR
-
-fdr <- 0.01
-
-# Specify UniProt taxon number to search.
-# 83333 -> E. coli K12
-
-UPtaxon <- UniProt.ws(83333)
-
-# Need to run this command for furrr
-
-plan(multisession(workers = 10))
-
 # Functions -----------------------------------------------------------------------------------
 
 kickout <- function(list) {
@@ -362,6 +326,41 @@ getuniprotinfo <- function(tbl, taxon = NULL, tdreport = TRUE) {
   
 }
 
+getuniprotinfo2 <- function(tbl, filelistnum, tdreport = TRUE) {
+  
+  # Instead of querying UniProt for information we have already gotten
+  # in 01_get_protein_info.R, why not bring it in from results_protein?
+  #
+  # Find column in the input tibble which has "accession"
+  # in it and use it to get info from UniProt
+  
+  accession_name <- grep("accession", names(tbl),
+                         ignore.case = TRUE, value = TRUE)
+  
+  # If the data is coming from a TDreport, select relevant columns 
+  # from input to function
+  
+  if (tdreport == TRUE) {
+    
+    results <- dplyr::select(tbl, c(1, 3, 6, 7, 8, 9))
+    names(results) <- c("UNIPROTKB", "ProteoformRecordNum", "Qvalue", "filename",
+                        "MonoisotopicMass", "AverageMass")
+    
+  } else {
+    results <- tibble(UNIPROTKB = pull(tbl, accession_name))
+  }
+
+  results %<>% left_join(dplyr::select(results_protein[[filelistnum]],
+                                       -c(Qvalue, 
+                                          filename,
+                                          monoiso_mass,
+                                          ave_mass)), by = "UNIPROTKB")
+  
+  
+  return(results)
+  
+}
+
 addmasses <- function(tbl) {
   
   # This function uses the Peptides package to determine
@@ -490,10 +489,12 @@ print("Getting info from UniProt...")
 # keytypes <- UniProt.ws::keytypes(UPtaxon) %>% enframe
 # columns <- UniProt.ws::columns(UPtaxon) %>% enframe
 
+filelistnum <- as.list(seq_along(filelist))
+
 results_proteoform <- proteoformlist %>% 
-  future_map(getuniprotinfo, taxon = UPtaxon,
-             tdreport = tdreport_file) %>%
-  future_map(getGOterms)
+  future_map2(filelistnum,
+              getuniprotinfo2,
+              tdreport = tdreport_file)
 
 if (tdreport_file == FALSE) {
   
