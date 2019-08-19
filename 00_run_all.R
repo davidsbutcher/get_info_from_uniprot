@@ -38,9 +38,13 @@ library(ggpubr)
 
 setwd(here())
 
-## ADD DIRECTORY/DIRECTORIES CONTAINING FILES TO SCAN!
+## Add a directory with files to scan. By default all subdirectories 
+## will be checked UNLESS the directory has "deprecated" in its name.
+## All input files must be csv, xlsx, or tdReport files.
+## You can also add the full path to a single file (including extension).
 
-filedir <- c("Z:/ICR/David Butcher/TDReports/201907_EcoliMG1655WCL_msnfills_2-6")
+filedir <- 
+  c("Z:/ICR/David Butcher/TDReports/201907_EcoliMG1655WCL_msnfills_2-6/20190705_EcoliMG1655_unfracWCL_msnfills2.tdReport")
 
 # Specify false discovery rate to use for
 # rejection of hits (as decimal) when using a
@@ -52,6 +56,14 @@ fdr <- 0.01
 # 83333 -> E. coli K12
 
 UPtaxon <- UniProt.ws(83333)
+
+# QuickGO_annotations_20190708.tsv contains all GO IDs and corresponding
+# GO terms associated with cellular components, i.e. subcellular localization.
+# Loading it provides a lookup table we can use to get subcell loc. for
+# any relevant GO IDs
+
+go_locs <- read_tsv("QuickGO_annotations_20190708.tsv") %>%
+  .["GO NAME"] %>% unique() %>% pull()
 
 # Need to run this command for furrr. If 10
 # is too many sessions for your system try 5

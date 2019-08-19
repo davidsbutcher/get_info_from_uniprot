@@ -28,11 +28,6 @@ read_tdreport <- function(tdreport, proteinlist, fdr_cutoff = 0.01, file_dir = N
   
   setwd(file_dir)
   
-  print("Did protein list make it in okay???")
-  print(proteinlist)
-  
-  Sys.sleep(3)
-  
   #Establish database connection. Keep trying until it works!
   
   safe_dbConnect <- safely(dbConnect)
@@ -109,54 +104,80 @@ read_tdreport <- function(tdreport, proteinlist, fdr_cutoff = 0.01, file_dir = N
   
   for (i in seq_along(biologicalproteoform$Id)) {
     
-    # Retrieve BiologicalProteoformIDs for which IsoformID
-    # is a match to this tibble row value
+    qValueExists <- any(!is.na(q_vals$GlobalQvalue[q_vals$ExternalId == biologicalproteoform$Id[i]]))
     
-    # bioprotid <- con %>%
-    #   RSQLite::dbGetQuery("SELECT Id, IsoformId 
-    #                       FROM BiologicalProteoform") %>%
-    #   as_tibble %>%
-    #   filter(IsoformId == isoform_id$Id[i])
+    # If there is a Q value, get minimum Q value from among all Q values
+    # for this Isoform ID then assign it to "Qvalue" column. Otherwise
+    # assign value 1000000 so it is rejected when performing FDR cutoff
     
-    # Get minimum Q value from among all Q values for this biological
-    # proteoform ID then assign it to "Qvalue" column
-    
-    min_q_val <-
-      q_vals$GlobalQvalue[q_vals$ExternalId == biologicalproteoform$Id[i]] %>%
-      min(na.rm = TRUE)
+    if (qValueExists == TRUE) {
+      
+      min_q_val <-
+        q_vals$GlobalQvalue[q_vals$ExternalId == biologicalproteoform$Id[i]] %>%
+        min(na.rm = TRUE)
+      
+      
+    } else {
+      
+      message(glue("NO VALID Q VALUE FOUND, inserting garbage value in row {i}"))
+      
+      min_q_val <- 1000000
+      
+    }
     
     biologicalproteoform$Qvalue[i] <- min_q_val
     
-    # Get HitId from q_vals corresponding to lowest Q value hit
-    # to be used to find information on data file name
-    
-    datafile_hit_id <- 
-      q_vals %>%
-      filter(GlobalQvalue == min_q_val) %>%
-      .$HitId %>% 
-      .[1]
+    if (qValueExists == TRUE) {
+      
+      datafile_hit_id <- 
+        q_vals %>%
+        filter(GlobalQvalue == min_q_val) %>%
+        .$HitId %>% 
+        .[1]
+      
+    } else {
+      
+      datafile_hit_id <- NA
+      
+    }
     
     # Pull all HitIds and DataFileIds from "Hit" table and
     # filter down to single value containing datafile number
     # for lowest Q-value hit
     
-    datafile_id <- con %>%
-      RSQLite::dbGetQuery("SELECT Id, DataFileId 
+    if (qValueExists == TRUE & is.na(datafile_hit_id) == FALSE) {
+      
+      datafile_id <- con %>%
+        RSQLite::dbGetQuery("SELECT Id, DataFileId 
                           FROM Hit") %>%
-      as_tibble %>% 
-      filter(Id == {{datafile_hit_id}}) %>% 
-      .$DataFileId %>% 
-      .[1]
+        as_tibble %>% 
+        filter(Id == {{datafile_hit_id}}) %>% 
+        .$DataFileId %>% 
+        .[1]
+      
+    } else {
+      
+      datafile_id <- NA
+      
+    }
     
     # Lookup datafile_id in "Id" column of "Datafile" table
     # to get corresponding file name
     
-    biologicalproteoform$filename[i] <- con %>%
-      RSQLite::dbGetQuery("SELECT Id, Name 
+    if (qValueExists == TRUE & is.na(datafile_id) == FALSE) {
+      
+      biologicalproteoform$filename[i] <- con %>%
+        RSQLite::dbGetQuery("SELECT Id, Name 
                           FROM DataFile") %>%
-      as_tibble %>% 
-      filter(Id == datafile_id) %>% 
-      .$Name
+        as_tibble %>% 
+        filter(Id == datafile_id) %>% 
+        .$Name
+      
+    } else {
+      
+      biologicalproteoform$filename[i] <- NA
+      
+    }
     
     # Get masses from mass_tbl and add to appropriate column
     
@@ -178,44 +199,42 @@ read_tdreport <- function(tdreport, proteinlist, fdr_cutoff = 0.01, file_dir = N
   biologicalproteoform %<>% 
     filter(Qvalue < fdr_cutoff)
   
-  biologicalproteoform_global1 <<- biologicalproteoform
-  
   revseq <- rev(seq_along(biologicalproteoform$AccessionNumber))
   
   for (i in seq_along(biologicalproteoform$AccessionNumber)) {
     
-    print(glue("\n\n\nBegin iteration {i} of loop.."))
+    # message(glue("\n\n\nBegin iteration {i} of loop.."))
     
-    accessiontocheck <<- biologicalproteoform$AccessionNumber[revseq[i]]
+    accessiontocheck <- biologicalproteoform$AccessionNumber[revseq[i]]
     
     if (accessiontocheck %in% proteinlist$AccessionNumber == TRUE) {
       
-      qvaltocheck <<- proteinlist %>% filter(AccessionNumber == accessiontocheck) %>% .$Qvalue
+      qvaltocheck <- proteinlist %>% filter(AccessionNumber == accessiontocheck) %>% .$Qvalue
       
     } else {
       
-      qvaltocheck <<- NA 
+      qvaltocheck <- NA 
       
     }
     
     if (is.na(qvaltocheck) == FALSE & qvaltocheck > fdr_cutoff) {
       
       biologicalproteoform %<>% .[-revseq[i],]
-      print(glue("Q value above FDR, erasing proteoform {i}..."))
+      message(glue("Q value above FDR, erasing proteoform {i}..."))
   
     } else if (is.na(qvaltocheck) == TRUE) {
     
       biologicalproteoform %<>% .[-revseq[i],]
-      print(glue("Q value is NA, erasing proteoform {i}..."))
+      message(glue("Q value is NA, erasing proteoform {i}..."))
       
     } else {
      
-      print(glue("**NOT** erasing proteoform {i}!"))
+      # print(glue("**NOT** erasing proteoform {i}!"))
        
     }
     
-    print (biologicalproteoform)
-    print(glue("End of iteration {i} of loop."))
+    # print (biologicalproteoform)
+    # print(glue("End of iteration {i} of loop."))
 
   }
   
@@ -225,10 +244,8 @@ read_tdreport <- function(tdreport, proteinlist, fdr_cutoff = 0.01, file_dir = N
   
   dbDisconnect(con)
   
-  print("Loopp finished")
+  print("Finished checking corresponding protein entries for Q values above cutoff!")
   print(biologicalproteoform)
-  
-  biologicalproteoform_global2 <<- biologicalproteoform
   
   return(biologicalproteoform)
 }
@@ -253,8 +270,6 @@ getuniprotinfo <- function(tbl, taxon = NULL, tdreport = TRUE) {
   } else {
     results <- tibble(UNIPROTKB = pull(tbl, accession_name))
   }
-  
-  results_init_global <<- results
   
   results_temp <- tibble()
   
@@ -314,13 +329,7 @@ getuniprotinfo <- function(tbl, taxon = NULL, tdreport = TRUE) {
     pb$tick()
   }
   
-  results_global <<- results
-  
-  results_temp_global <<- results_temp
-  
   results_after_join <- left_join(results, results_temp, by = "PFR")
-  
-  results_after_join_global <<- results_after_join
   
   return(results_after_join)
   
@@ -377,7 +386,7 @@ getGOterms <- function(tbl) {
   library(magrittr)
   library(GO.db)
   
-  print("Getting GO subcellular locations...")
+  message("Getting GO subcellular locations...")
   
   temptbl <- tibble()
   
@@ -397,8 +406,6 @@ getGOterms <- function(tbl) {
     
     }
   }
-  
-  temptbl_global <<- temptbl
   
   return(temptbl)
 }
@@ -431,10 +438,6 @@ getlocations <- function(resultslist) {
 # name includes the word "accession" somewhere. Case doesn't matter
 # but spelling does.
 
-filelist <- filedir %>%
-  list.files(recursive = T, include.dirs = T) %>%
-  as.list %>% kickout
-
 setwd(filedir)
 
 extension <- filelist %>% future_map(tools::file_ext)
@@ -459,7 +462,7 @@ if (length(unique(extension)) > 1) {
 
 } else if (extension[[1]] == "tdReport") {
   
-  print("Reading tdReport...")
+  message("Reading proteoform data from tdReport...")
   proteoformlist <- filelist %>% future_map2(., proteinlist, read_tdreport,
                                       fdr_cutoff = fdr,
                                       file_dir = filedir)
@@ -473,14 +476,6 @@ if (length(unique(extension)) > 1) {
 names(proteoformlist) <- filelist
 
 setwd(here())
-
-# QuickGO_annotations_20190708.tsv contains all GO IDs and corresponding
-# GO terms associated with cellular components, i.e. subcellular localization.
-# Loading it provides a lookup table we can use to get subcell loc. for
-# any relevant GO IDs
-
-go_locs <- read_tsv("QuickGO_annotations_20190708.tsv") %>%
-  .["GO NAME"] %>% unique() %>% pull()
 
 # Access UniProt ------------------------------------------------------------------------------
 

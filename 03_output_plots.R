@@ -2,6 +2,11 @@
 
 # Make ggplots --------------------------------------------------------------------------------
 
+pb <- progress_bar$new(
+  format = " Creating ggplots [:bar] :percent eta: :eta :spin",
+  total = (length(results_protein) - 1) * 3,
+  clear = FALSE, width= 60)
+
 for (i in head(seq_along(results_protein), -1)) {
   
   setwd(here("output/png"))
@@ -14,14 +19,16 @@ for (i in head(seq_along(results_protein), -1)) {
                    binwidth = 1000, col = "black", fill = "blue") +
     labs(x = "Average Mass (Da)",
          y = "Protein Count",
-         title = names(proteinlist)[i]) +
+         title = basename(names(proteinlist)[i])) +
     xlim(0, 60000) +
     theme_minimal()
   
-  ggname <- glue("{names(proteinlist)[i]}_proteins.png")
+  ggname <- glue("{basename(names(proteinlist)[i])}_proteins.png")
   
-  ggsave(filename = ggname, plot = protein_plot, device = "png",
-         height = 5.4, width = 9.6, dpi = 600)
+  ggsave(filename = ggname, plot = protein_plot, 
+         device = "png", height = 5.4, width = 9.6, dpi = 600)
+  
+  pb$tick()
   
   #
   #
@@ -31,47 +38,31 @@ for (i in head(seq_along(results_protein), -1)) {
                    binwidth = 1000, col = "black", fill = "blue") +
     labs(x = "Average Mass (Da)",
          y = "Proteoform Count",
-         title = names(proteoformlist)[i]) +
+         title = basename(names(proteoformlist)[i])) +
     xlim(0, 60000) +
     theme_minimal()
   
-  ggname <- glue("{names(proteoformlist)[i]}_proteoforms.png")
+  ggname <- glue("{basename(names(proteoformlist)[i])}_proteoforms.png")
   
-  ggsave(filename = ggname, plot = proteoform_plot, device = "png",
-         height = 5.4, width = 9.6, dpi = 600)
+  ggsave(filename = ggname, plot = proteoform_plot, 
+         device = "png", height = 5.4, width = 9.6, dpi = 600)
 
+  pb$tick()
+  
   #
   #
   
   ggblap <- ggarrange(protein_plot, proteoform_plot, ncol = 2)
+
+  ggname <- glue("{basename(names(proteinlist)[i])}_all.png")
+
+  ggsave(filename = ggname, plot = ggblap,
+         device = "png", height = 5.4, width = 9.6, dpi = 600)
   
-  ggname <- glue("{names(proteinlist)[i]}_all.png")
-  
-  ggsave(filename = ggname, plot = ggblap, device = "png",
-         height = 5.4, width = 9.6, dpi = 600)
+  pb$tick()
 
   setwd(here())
-  }
-
-# The number of geom_freqpoly lines cannot exceed the number of 
-# input files (until I figure out how to fix it)
-
-ggplot() +
-  geom_freqpoly(data = results_proteoform[[1]], aes(AverageMass),
-                 binwidth = 1000, col = "black", size = 1.5) +
-  geom_freqpoly(data = results_proteoform[[2]], aes(AverageMass),
-                binwidth = 1000, col = "blue", size = 1.5) +
-  # geom_freqpoly(data = results_proteoform[[3]], aes(AverageMass),
-  #               binwidth = 1000, col = "red", size = 1.5) +
-  # geom_freqpoly(data = results_proteoform[[4]], aes(AverageMass),
-  #               binwidth = 1000, col = "grey", size = 1.5) +
-  # geom_freqpoly(data = results_proteoform[[5]], aes(AverageMass),
-  #               binwidth = 1000, col = "purple", size = 1.5) +
-  labs(x = "Average Mass (Da)",
-       y = "Proteoform Count",
-       title = "All TD Reports") +
-  xlim(0, 60000) +
-  theme_minimal()
+}
 
 # Save Workspace ------------------------------------------------------------------------------
 

@@ -8,14 +8,20 @@ kickout <- function(list) {
   
   # This function removes any element from the list of input files
   # (from root/input) which does not have one of the allowed
-  # extensions
+  # extensions or which has "deprecated"
   
   allowed_ext <- c("tdReport", "csv", "xlsx")
   
   for (i in rev(seq_along(list))) {
     
     if (!(tools::file_ext(list[[i]]) %in% allowed_ext)) {
+      
       list[[i]] <- NULL 
+      
+    } else if (str_detect(list[[i]], fixed("deprecated", TRUE)) == TRUE) {
+      
+      list[[i]] <- NULL 
+      
     }
   }
   
@@ -24,7 +30,7 @@ kickout <- function(list) {
 
 read_tdreport <- function(tdreport, fdr_cutoff = 0.01) {
   
-  message(glue("\nEstablishing connection to {tdreport}..."))
+  message(glue("\nEstablishing connection to {basename(tdreport)}..."))
   Sys.sleep(2)
   
   #Establish database connection. Keep trying until it works!
@@ -70,22 +76,6 @@ read_tdreport <- function(tdreport, fdr_cutoff = 0.01) {
   
   for (i in seq_along(isoform_id$Id)) {
     
-    # glue("\nFinding matching Q values for isoform_id row {i}...") %>% 
-    #   print
-    
-    # Retrieve BiologicalProteoformIDs for which IsoformID
-    # is a match to this tibble row value
-    
-    # bioprotid <- con %>%
-    #   RSQLite::dbGetQuery("SELECT Id, IsoformId 
-    #                       FROM BiologicalProteoform") %>%
-    #   as_tibble %>%
-    #   filter(IsoformId == isoform_id$Id[i])
-    
-    # Check to see if at least one corresponding Q value
-    # can be found for the corresponding Isoform/ExternalId
-    # in the q_vals tibble and if there is at least one non-NA value
-    
     qValueExists <- any(!is.na(q_vals$GlobalQvalue[q_vals$ExternalId == isoform_id$Id[i]]))
     
     # If there is a Q value, get minimum Q value from among all Q values
@@ -94,16 +84,10 @@ read_tdreport <- function(tdreport, fdr_cutoff = 0.01) {
     
     if (qValueExists == TRUE) {
       
-      # print(glue("Q value found, inserting in output table, row {i}"))
-      
       min_q_val <-
         q_vals$GlobalQvalue[q_vals$ExternalId == isoform_id$Id[i]] %>%
         min(na.rm = TRUE)
-    
-      # Is there at least one non-NA value the group of Qvalues corresponding
-      # to this ExternalID? If there are, find minimum among them and set it to min_q_val
-        
-      # if (any(is.na(q_vals$GlobalQvalue[q_vals$ExternalId == isoform_id$Id[i]]) == FALSE)) {
+
       
     } else {
       
@@ -174,8 +158,6 @@ read_tdreport <- function(tdreport, fdr_cutoff = 0.01) {
   # Filter isoform_id by FDR cutoff value (default 0.01 or 1%)
   # and place results in "output" tibble
   
-  isoform_id_global <<- isoform_id
-  
   output <- isoform_id %>% 
     filter(Qvalue < fdr_cutoff)
   
@@ -184,8 +166,6 @@ read_tdreport <- function(tdreport, fdr_cutoff = 0.01) {
   # Close database connection and return output table
   
   dbDisconnect(con)
-  
-  output_global <<- output
   
   message("read_tdreport Finished!")
   Sys.sleep(0.2)
@@ -292,12 +272,12 @@ addmasses <- function(tbl) {
   
 }
 
-getGOterms <- function(tbl) {
+getGOterms <- function(tbl, file_list) {
   
   library(magrittr)
   library(GO.db)
 
-  message("Getting GO subcellular locations...")
+  message(glue("Getting GO subcellular locations for {basename(file_list)}..."))
   
   temptbl <- tibble()
   
@@ -341,14 +321,23 @@ getlocations <- function(resultslist) {
 
 # Read Data Files -----------------------------------------------------------------------------
 
-# Files are read from subdirectory called "input". Data files must
-# be in csv, xlsx, pr TDreport format and have a column of UniProt IDs whose 
+# Data files must
+# be in csv, xlsx, or tdReport format and have a column of UniProt IDs whose 
 # name includes the word "accession" somewhere. Case doesn't matter
 # but spelling does.
 
+if (file.exists(filedir) == TRUE) {
+  
+  filelist <- filedir %>% as.list() %>% kickout
+  filedir %<>% dirname()
+  
+} else {
+
 filelist <- filedir %>%
-  list.files(recursive = F, include.dirs = F, full.names = T) %>%
+  list.files(recursive = T, include.dirs = T, full.names = T) %>%
   as.list %>% kickout
+
+}
 
 setwd(filedir)
 
@@ -356,11 +345,11 @@ extension <- filelist %>% future_map(tools::file_ext)
 
 if (length(unique(extension)) > 1) {
   
-  stop("More than one kind of file. Try again.")
+  stop("More than one kind of input file. Try again.")
   
 } else if (length(extension) == 0) {
   
-  stop("No acceptable input files. Only tdReport, csv, and xlsx allowed.")
+  stop("No acceptable input files. Only tdReport, csv, or xlsx are allowed.")
   
 } else if (extension[[1]] == "csv") {
   
@@ -374,7 +363,7 @@ if (length(unique(extension)) > 1) {
   
 } else if (extension[[1]] == "tdReport") {
   
-  message("Reading tdReport...")
+  message("Reading protein data from tdReport...")
   proteinlist <- filelist %>% future_map(read_tdreport, fdr_cutoff = fdr)
   tdreport_file <- TRUE
   
@@ -387,14 +376,6 @@ names(proteinlist) <- filelist
 
 setwd(here())
 
-# QuickGO_annotations_20190708.tsv contains all GO IDs and corresponding
-# GO terms associated with cellular components, i.e. subcellular localization.
-# Loading it provides a lookup table we can use to get subcell loc. for
-# any relevant GO IDs
-
-go_locs <- read_tsv("QuickGO_annotations_20190708.tsv") %>%
-  .["GO NAME"] %>% unique() %>% pull()
-
 # Access UniProt ------------------------------------------------------------------------------
 
 # keytypes <- UniProt.ws::keytypes(UPtaxon) %>% enframe
@@ -402,10 +383,13 @@ go_locs <- read_tsv("QuickGO_annotations_20190708.tsv") %>%
 
 results_protein <- proteinlist %>% 
   future_map(getuniprotinfo, taxon = UPtaxon,
-             tdreport = tdreport_file) %>%
-  future_map(as_tibble) %>%
-  future_map(getGOterms) %>% 
-  future_map(addmasses)
+             tdreport = tdreport_file,
+             .progress = TRUE) %>%
+  future_map(as_tibble, .progress = TRUE)
+
+results_protein %<>%
+  map2(filelist, getGOterms) %>% 
+  future_map(addmasses, .progress = TRUE)
 
 results_protein[[length(results_protein)+1]] <- getlocations(results_protein)
 
