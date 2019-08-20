@@ -421,8 +421,7 @@ getlocations <- function(resultslist) {
     
     counts$proteoform_count[i] <- resultslist[[i]] %>% .$UNIPROTKB %>% length()
     
-    counts$cytosol_count[i] <- sum(str_detect(resultslist[[i]]$GO_subcell_loc, "cytosol"), na.rm = TRUE) +
-      sum(str_detect(resultslist[[i]]$GO_subcell_loc, "cytoplasm"), na.rm = TRUE)
+    counts$cytosol_count[i] <- sum(str_detect(resultslist[[i]]$GO_subcell_loc, "cytosol|cytoplasm"), na.rm = TRUE)
     
     counts$membrane_count[i] <- sum(str_detect(resultslist[[i]]$GO_subcell_loc, "membrane"), na.rm = TRUE)
     

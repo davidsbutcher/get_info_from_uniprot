@@ -40,11 +40,12 @@ setwd(here())
 
 ## Add a directory with files to scan. By default all subdirectories 
 ## will be checked UNLESS the directory has "deprecated" in its name.
+## MAKE SURE TO ADD THE FINAL FORWARD SLASH for directories
 ## All input files must be csv, xlsx, or tdReport files.
 ## You can also add the full path to a single file (including extension).
 
 filedir <- 
-  c("Z:/ICR/David Butcher/TDReports/201907_EcoliMG1655WCL_msnfills_2-6/20190705_EcoliMG1655_unfracWCL_msnfills2.tdReport")
+  c("Z:/ICR/David Butcher/TDReports/TDreports_BPA_MagLab/")
 
 # Specify false discovery rate to use for
 # rejection of hits (as decimal) when using a
@@ -54,8 +55,9 @@ fdr <- 0.01
 
 # Specify UniProt taxon number to search.
 # 83333 -> E. coli K12
+# 9606 -> Homo sapiens
 
-UPtaxon <- UniProt.ws(83333)
+UPtaxon <- UniProt.ws(9606)
 
 # QuickGO_annotations_20190708.tsv contains all GO IDs and corresponding
 # GO terms associated with cellular components, i.e. subcellular localization.

@@ -205,12 +205,12 @@ getuniprotinfo <- function(tbl, taxon = NULL, tdreport = TRUE) {
     total = length(pull(tbl, accession_name)),
     clear = FALSE, width= 60)
   
+  # Create a safe version of UniProt.ws which will not crash
+  # the whole damn program if it fails
+  
+  safeselect <- safely(UniProt.ws::select)
+  
   for (i in seq_along(pull(tbl, accession_name))) {
-    
-    # Create a safe version of UniProt.ws which will not crash
-    # the whole damn program if it fails
-    
-    safeselect <- safely(UniProt.ws::select)
     
     # For each accession number, pull relevant info from UniProt 
     # and make a new tibble with just that new line
@@ -309,8 +309,7 @@ getlocations <- function(resultslist) {
   
     counts$protein_count[i] <- resultslist[[i]] %>% .$UNIPROTKB %>% length()
     
-    counts$cytosol_count[i] <- sum(str_detect(resultslist[[i]]$GO_subcell_loc, "cytosol"), na.rm = TRUE) +
-      sum(str_detect(resultslist[[i]]$GO_subcell_loc, "cytoplasm"), na.rm = TRUE)
+    counts$cytosol_count[i] <- sum(str_detect(resultslist[[i]]$GO_subcell_loc, "cytosol|cytoplasm"), na.rm = TRUE)
     
     counts$membrane_count[i] <- sum(str_detect(resultslist[[i]]$GO_subcell_loc, "membrane"), na.rm = TRUE)
   
@@ -341,7 +340,7 @@ filelist <- filedir %>%
 
 setwd(filedir)
 
-extension <- filelist %>% future_map(tools::file_ext)
+extension <- filelist %>% map(tools::file_ext)
 
 if (length(unique(extension)) > 1) {
   
@@ -354,12 +353,12 @@ if (length(unique(extension)) > 1) {
 } else if (extension[[1]] == "csv") {
   
   message("Reading csv files...")
-  proteinlist  <- filelist %>% future_map(read_csv)
+  proteinlist  <- filelist %>% map(read_csv)
   
 } else if (extension[[1]] == "xlsx") {
   
   message("Reading xlsx files...")
-  proteinlist  <- filelist %>% future_map(read_xlsx)
+  proteinlist  <- filelist %>% map(read_xlsx)
   
 } else if (extension[[1]] == "tdReport") {
   
@@ -385,11 +384,11 @@ results_protein <- proteinlist %>%
   future_map(getuniprotinfo, taxon = UPtaxon,
              tdreport = tdreport_file,
              .progress = TRUE) %>%
-  future_map(as_tibble, .progress = TRUE)
+  map(as_tibble)
 
 results_protein %<>%
-  map2(filelist, getGOterms) %>% 
-  future_map(addmasses, .progress = TRUE)
+  future_map2(filelist, getGOterms, .progress = TRUE) %>% 
+  map(addmasses)
 
 results_protein[[length(results_protein)+1]] <- getlocations(results_protein)
 
