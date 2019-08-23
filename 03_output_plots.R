@@ -77,6 +77,22 @@ glue("{systime}_workspace_image.RData") %>%
 
 setwd(here())
 
+# Testing Other Output Formats ----------------------------------------------------------------
+# 
+# library(svglite)
+# 
+# svglite(file = "svglite_test1.svg", width = 9.6, height = 5.4, bg = "transparent", pointsize = 12)
+# proteoform_plot
+# dev.off()
+# 
+# library(grDevices)
+# 
+# pdf(file = "pdf_test1.pdf", width = 9.6, height = 5.4, bg = "transparent")
+# proteoform_plot
+# dev.off()
+# 
+# ggsave(filename = "png_test1.png", plot = proteoform_plot, 
+#        device = "png", height = 5.4, width = 9.6, dpi = 600)
 
 # Deprecated code -----------------------------------------------------------------------------
 

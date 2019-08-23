@@ -300,18 +300,52 @@ getGOterms <- function(tbl, file_list) {
 
 getlocations <- function(resultslist) {
   
-  counts <- tibble(filename = names(resultslist),
+  # This function gets counts of membrane, cytosolic, and "both" proteins based on
+  # GO terms pulled from UniProt for each unique accession number.
+  
+  counts <- tibble(filename = basename(names(resultslist)),
                    protein_count = NA,
                    cytosol_count = NA,
-                   membrane_count = NA)
+                   membrane_count = NA,
+                   both_count = NA,
+                   none_count = NA)
   
   for (i in seq_along(resultslist)) {
-  
+
+    # For every protein in each output, get the count of proteins whose GO terms
+    # include "cytosol" OR "cytoplasm", "membrane", or BOTH. 
+    # WE DO NOT DIFFERENTIATE BETWEEN MEMBRANE TYPES!
+    
+    allAccession <- resultslist[[i]]$UNIPROTKB
+    
+    bothAccession <-  resultslist[[i]]$UNIPROTKB[str_detect(resultslist[[i]]$GO_subcell_loc,
+                                                            c("cytosol|cytoplasm", "membrane"))]
+    
+    cytosolAccession <-  resultslist[[i]]$UNIPROTKB[str_detect(resultslist[[i]]$GO_subcell_loc,
+                                                               c("cytosol|cytoplasm"))]
+    
+    membraneAccession <- resultslist[[i]]$UNIPROTKB[str_detect(resultslist[[i]]$GO_subcell_loc,
+                                                               c("membrane"))]
+    
+    glue("{sum(cytosolAccession %in% bothAccession)} cytosolic proteins in 'both' for iteration {i}") %>% message
+    
+    glue("{sum(membraneAccession %in% bothAccession)} membrane proteins in 'both' for iteration {i}") %>% message
+
+    # For cytosol_count and membrane_count, ONLY count the accessions which are NOT 
+    # found in the list of accessions including both "cytosol|cytoplasm" and "membrane".
+    # This prevents double-counting of proteins by localization
+    
     counts$protein_count[i] <- resultslist[[i]] %>% .$UNIPROTKB %>% length()
     
-    counts$cytosol_count[i] <- sum(str_detect(resultslist[[i]]$GO_subcell_loc, "cytosol|cytoplasm"), na.rm = TRUE)
+    counts$cytosol_count[i] <- sum(!cytosolAccession %in% bothAccession)
     
-    counts$membrane_count[i] <- sum(str_detect(resultslist[[i]]$GO_subcell_loc, "membrane"), na.rm = TRUE)
+    counts$membrane_count[i] <- sum(!membraneAccession %in% bothAccession)
+    
+    counts$both_count[i] <- length(bothAccession)
+    
+    counts$none_count[i] <- sum(!(allAccession %in% bothAccession) &
+                                  !(allAccession %in% cytosolAccession) &
+                                  !(allAccession %in% membraneAccession))
   
   }
   
@@ -399,6 +433,7 @@ results_protein[[length(results_protein)+1]] <- getlocations(results_protein)
 
 systime <- format(Sys.time(), "%Y%m%d_%H%M%S")
 resultsname <- glue("{systime}_protein_results.xlsx")
+resultsobjectname <- glue("{systime}_protein_results.rds")
 
 names(results_protein) <- unlist(filelist)
 names(results_protein)[length(results_protein)] <- "SUMMARY"
@@ -415,5 +450,8 @@ setwd(here("output"))
 
 results_protein %>%
   writexl::write_xlsx(path = resultsname)
+
+results_protein %>%
+  saveRDS(file = glue("rds/{resultsobjectname}"))
 
 setwd(here())

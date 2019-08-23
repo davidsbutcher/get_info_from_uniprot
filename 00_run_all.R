@@ -45,7 +45,8 @@ setwd(here())
 ## You can also add the full path to a single file (including extension).
 
 filedir <- 
-  c("Z:/ICR/David Butcher/TDReports/TDreports_BPA_MagLab/")
+  c("Z:/ICR/David Butcher/TDReports/201906_EcoliMG1655_GELFrEE/",
+    "Z:/ICR/David Butcher/TDReports/201906_EcoliMG1655_PEPPI/")
 
 # Specify false discovery rate to use for
 # rejection of hits (as decimal) when using a
@@ -57,7 +58,7 @@ fdr <- 0.01
 # 83333 -> E. coli K12
 # 9606 -> Homo sapiens
 
-UPtaxon <- UniProt.ws(9606)
+UPtaxon <- UniProt.ws(83333)
 
 # QuickGO_annotations_20190708.tsv contains all GO IDs and corresponding
 # GO terms associated with cellular components, i.e. subcellular localization.
@@ -79,7 +80,7 @@ tic()
 
 source("01_get_protein_info.R")
 source("02_get_proteoform_info.R")
-source("03_output_plots.R")
+# source("03_output_plots.R")
 
 totaltime <- capture.output(toc()) %>%
   str_extract("[0-9]+") %>%
