@@ -541,7 +541,6 @@ results_proteoform[[length(results_proteoform)+1]] <- getlocations(results_prote
 # An xlsx file with sheets corresponding to files in /data is written to
 # the project directory
 
-systime <- format(Sys.time(), "%Y%m%d_%H%M%S")
 resultsname <- glue("{systime}_proteoform_results.xlsx")
 resultsobjectname <- glue("{systime}_proteoform_results.rds")
 

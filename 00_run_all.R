@@ -45,8 +45,7 @@ setwd(here())
 ## You can also add the full path to a single file (including extension).
 
 filedir <- 
-  c("Z:/ICR/David Butcher/TDReports/201906_EcoliMG1655_GELFrEE/",
-    "Z:/ICR/David Butcher/TDReports/201906_EcoliMG1655_PEPPI/")
+  c("Z:/ICR/David Butcher/TDReports/20190413_EcoliMG1655_PEPPI_noCAM/20190413_EcoliMG1655_PEPPI_noCAM.tdReport")
 
 # Specify false discovery rate to use for
 # rejection of hits (as decimal) when using a
@@ -76,6 +75,10 @@ plan(multisession(workers = 10))
 
 # Run Scripts ---------------------------------------------------------------------------------
 
+# Save start time to variable for use in output filenames
+
+systime <- format(Sys.time(), "%Y%m%d_%H%M%S")
+
 tic()
 
 source("01_get_protein_info.R")
@@ -88,6 +91,8 @@ totaltime <- capture.output(toc()) %>%
   `/`(60) %>% round(digits = 2)
 
 print(glue("Elapsed time: {totaltime} min"))
+
+writeLines(capture.output(sessionInfo()), glue("{systime}_sessionInfo.txt"))
 
 pbPost("note", "R Analysis Finished",
        glue("Elapsed time: {totaltime} min \nDir: {filedir}")) 

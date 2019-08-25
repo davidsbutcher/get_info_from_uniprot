@@ -431,7 +431,11 @@ results_protein[[length(results_protein)+1]] <- getlocations(results_protein)
 # An xlsx file with sheets corresponding to files in /data is written to
 # the project directory
 
-systime <- format(Sys.time(), "%Y%m%d_%H%M%S")
+# If systime doesn't exists (i.e. script is not being run from 00_run_all)
+# create the systime variable
+
+if (exists("systime") == FALSE) systime <- format(Sys.time(), "%Y%m%d_%H%M%S")
+
 resultsname <- glue("{systime}_protein_results.xlsx")
 resultsobjectname <- glue("{systime}_protein_results.rds")
 

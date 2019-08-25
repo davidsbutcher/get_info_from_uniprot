@@ -68,8 +68,6 @@ for (i in head(seq_along(results_protein), -1)) {
 
 # Just in case I want to see an image from a particular run of results
 
-systime <- format(Sys.time(), "%Y%m%d_%H%M%S")
-
 setwd(here("output/workspace_images"))
 
 glue("{systime}_workspace_image.RData") %>% 
