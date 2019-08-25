@@ -485,13 +485,11 @@ if (length(unique(extension)) > 1) {
   
 } else if (extension[[1]] == "csv") {
   
-  print("Reading csv files...")
-  proteoformlist  <- filelist %>% future_map(read_csv)
-
+  message("Input is csv file, no proteoform data!")
+  
 } else if (extension[[1]] == "xlsx") {
   
-  print("Reading xlsx files...")
-  proteoformlist  <- filelist %>% future_map(read_xlsx)
+  message("Input is xlsx file, no proteoform data!")
 
 } else if (extension[[1]] == "tdReport") {
   
@@ -506,13 +504,21 @@ if (length(unique(extension)) > 1) {
   stop()
 }
 
+
+# *** THE REST OF THE SCRIPT WILL ONLY EXECUTE IF THE INPUT IS 
+# *** TDREPORT FORMAT!!
+
+if (tdreport_file == TRUE) {
+  
+# **************************
+
 names(proteoformlist) <- filelist
 
 setwd(here())
 
 # Access UniProt ------------------------------------------------------------------------------
 
-print("Getting info from UniProt...")
+print("Getting UniProt info from protein results...")
 
 # keytypes <- UniProt.ws::keytypes(UPtaxon) %>% enframe
 # columns <- UniProt.ws::columns(UPtaxon) %>% enframe
@@ -562,4 +568,7 @@ results_proteoform %>%
 results_proteoform %>%
   saveRDS(file = glue("rds/{resultsobjectname}"))
 
+}
+
 setwd(here())
+

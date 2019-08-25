@@ -4,7 +4,7 @@
 
 pb <- progress_bar$new(
   format = " Creating ggplots [:bar] :percent eta: :eta :spin",
-  total = (length(results_protein) - 1) * 3,
+  total = (length(results_protein) - 1),
   clear = FALSE, width= 60)
 
 for (i in head(seq_along(results_protein), -1)) {
@@ -28,36 +28,39 @@ for (i in head(seq_along(results_protein), -1)) {
   ggsave(filename = ggname, plot = protein_plot, 
          device = "png", height = 5.4, width = 9.6, dpi = 600)
   
-  pb$tick()
   
-  #
-  #
-  
-  proteoform_plot <- ggplot() +
-    geom_histogram(data = results_proteoform[[i]], aes(AverageMass),
-                   binwidth = 1000, col = "black", fill = "blue") +
-    labs(x = "Average Mass (Da)",
-         y = "Proteoform Count",
-         title = basename(names(proteoformlist)[i])) +
-    xlim(0, 60000) +
-    theme_minimal()
-  
-  ggname <- glue("{basename(names(proteoformlist)[i])}_proteoforms.png")
-  
-  ggsave(filename = ggname, plot = proteoform_plot, 
-         device = "png", height = 5.4, width = 9.6, dpi = 600)
-
-  pb$tick()
-  
-  #
-  #
-  
-  ggblap <- ggarrange(protein_plot, proteoform_plot, ncol = 2)
-
-  ggname <- glue("{basename(names(proteinlist)[i])}_all.png")
-
-  ggsave(filename = ggname, plot = ggblap,
-         device = "png", height = 5.4, width = 9.6, dpi = 600)
+  if (tdreport_file == TRUE) {
+    
+    
+    #
+    #
+    
+    proteoform_plot <- ggplot() +
+      geom_histogram(data = results_proteoform[[i]], aes(AverageMass),
+                     binwidth = 1000, col = "black", fill = "blue") +
+      labs(x = "Average Mass (Da)",
+           y = "Proteoform Count",
+           title = basename(names(proteoformlist)[i])) +
+      xlim(0, 60000) +
+      theme_minimal()
+    
+    ggname <- glue("{basename(names(proteoformlist)[i])}_proteoforms.png")
+    
+    ggsave(filename = ggname, plot = proteoform_plot, 
+           device = "png", height = 5.4, width = 9.6, dpi = 600)
+    
+    
+    #
+    #
+    
+    ggblap <- ggarrange(protein_plot, proteoform_plot, ncol = 2)
+    
+    ggname <- glue("{basename(names(proteinlist)[i])}_all.png")
+    
+    ggsave(filename = ggname, plot = ggblap,
+           device = "png", height = 5.4, width = 9.6, dpi = 600)
+    
+  }
   
   pb$tick()
 

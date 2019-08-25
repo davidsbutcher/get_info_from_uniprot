@@ -45,7 +45,7 @@ setwd(here())
 ## You can also add the full path to a single file (including extension).
 
 filedir <- 
-  c("Z:/ICR/David Butcher/TDReports/20190413_EcoliMG1655_PEPPI_noCAM/20190413_EcoliMG1655_PEPPI_noCAM.tdReport")
+  c("G:/My Drive/R projects/20190630_get_info_from_uniprot/input/peppi_f03_1dtt_2iaa.csv")
 
 # Specify false discovery rate to use for
 # rejection of hits (as decimal) when using a
@@ -64,8 +64,7 @@ UPtaxon <- UniProt.ws(83333)
 # Loading it provides a lookup table we can use to get subcell loc. for
 # any relevant GO IDs
 
-go_locs <- read_tsv("QuickGO_annotations_20190708.tsv") %>%
-  .["GO NAME"] %>% unique() %>% pull()
+go_locs_file <- "QuickGO_annotations_20190708.tsv"
 
 # Need to run this command for furrr. If 10
 # is too many sessions for your system try 5
@@ -75,6 +74,15 @@ plan(multisession(workers = 10))
 
 # Run Scripts ---------------------------------------------------------------------------------
 
+# Load file containing locations corresponding to
+# GO terms
+
+go_locs <- go_locs_file %>%
+  read_tsv() %>%
+  .["GO NAME"] %>%
+  unique() %>%
+  pull()
+
 # Save start time to variable for use in output filenames
 
 systime <- format(Sys.time(), "%Y%m%d_%H%M%S")
@@ -83,7 +91,7 @@ tic()
 
 source("01_get_protein_info.R")
 source("02_get_proteoform_info.R")
-# source("03_output_plots.R")
+source("03_output_plots.R")
 
 totaltime <- capture.output(toc()) %>%
   str_extract("[0-9]+") %>%

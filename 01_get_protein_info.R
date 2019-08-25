@@ -31,8 +31,7 @@ kickout <- function(list) {
 read_tdreport <- function(tdreport, fdr_cutoff = 0.01) {
   
   message(glue("\nEstablishing connection to {basename(tdreport)}..."))
-  Sys.sleep(2)
-  
+
   #Establish database connection. Keep trying until it works!
    
   safe_dbConnect <- safely(dbConnect)
@@ -388,11 +387,13 @@ if (length(unique(extension)) > 1) {
   
   message("Reading csv files...")
   proteinlist  <- filelist %>% map(read_csv)
+  tdreport_file <- FALSE
   
 } else if (extension[[1]] == "xlsx") {
   
   message("Reading xlsx files...")
   proteinlist  <- filelist %>% map(read_xlsx)
+  tdreport_file <- FALSE
   
 } else if (extension[[1]] == "tdReport") {
   
