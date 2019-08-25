@@ -10,29 +10,25 @@
 
 # Packages ------------------------------------------------------------------------------------
 
-library(UniProt.ws)
 library(here)
-library(glue)
 library(svMisc)
-library(tidyverse)
 library(furrr)
 library(Peptides)
 library(magrittr)
 library(writexl)
 library(readxl)
-library(beepr)
 library(RSQLite)
 library(DBI)
-library(zeallot)
 library(GO.db)
 library(tools)
 library(progress)
 library(tictoc)
 library(glue)
-library(rstudioapi)
 library(RPushbullet)
-library(magrittr)
 library(ggpubr)
+library(UniProt.ws)
+library(magrittr)
+library(tidyverse)
 
 # Initialize Parameters -----------------------------------------------------------------------
 
@@ -100,7 +96,9 @@ totaltime <- capture.output(toc()) %>%
 
 print(glue("Elapsed time: {totaltime} min"))
 
-writeLines(capture.output(sessionInfo()), glue("{systime}_sessionInfo.txt"))
-
 pbPost("note", "R Analysis Finished",
-       glue("Elapsed time: {totaltime} min \nDir: {filedir}")) 
+       glue("Elapsed time: {totaltime} min \nDir: {filedir}"))
+
+sessionInfo() %>%
+  capture.output %>%
+  writeLines(glue("output/{systime}_sessionInfo.txt"))
