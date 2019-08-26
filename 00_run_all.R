@@ -67,7 +67,6 @@ go_locs_file <- "QuickGO_annotations_20190708.tsv"
 
 plan(multisession(workers = 10))
 
-
 # Run Scripts ---------------------------------------------------------------------------------
 
 # Load file containing locations corresponding to
@@ -96,8 +95,11 @@ totaltime <- capture.output(toc()) %>%
 
 print(glue("Elapsed time: {totaltime} min"))
 
-pbPost("note", "R Analysis Finished",
-       glue("Elapsed time: {totaltime} min \nDir: {filedir}"))
+# Optional line used to contact any Pushbullet enabled device.
+# View ?pbSetup for help
+
+# pbPost("note", "R Analysis Finished",
+#        glue("Elapsed time: {totaltime} min \nDir: {filedir}"))
 
 sessionInfo() %>%
   capture.output %>%
