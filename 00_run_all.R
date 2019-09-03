@@ -17,8 +17,8 @@ library(Peptides)
 library(magrittr)
 library(writexl)
 library(readxl)
-library(RSQLite)
 library(DBI)
+library(RSQLite)
 library(GO.db)
 library(tools)
 library(progress)
@@ -41,7 +41,7 @@ setwd(here())
 ## You can also add the full path to a single file (including extension).
 
 filedir <- 
-  c("G:/My Drive/R projects/20190630_get_info_from_uniprot/input/peppi_f03_1dtt_2iaa.csv")
+  c("PEPPI_F01-F06_1mMDTT_2mMIAA.tdReport")
 
 # Specify false discovery rate to use for
 # rejection of hits (as decimal) when using a
@@ -53,7 +53,7 @@ fdr <- 0.01
 # 83333 -> E. coli K12
 # 9606 -> Homo sapiens
 
-UPtaxon <- UniProt.ws(83333)
+taxon_number <- 83333
 
 # QuickGO_annotations_20190708.tsv contains all GO IDs and corresponding
 # GO terms associated with cellular components, i.e. subcellular localization.
@@ -63,11 +63,49 @@ UPtaxon <- UniProt.ws(83333)
 go_locs_file <- "QuickGO_annotations_20190708.tsv"
 
 # Need to run this command for furrr. If 10
-# is too many sessions for your system try 5
+# is too many sessions for your system try 5.
+# If running <10 files, change workers
+# to be equal to number of files.
+# workers = 1 is equivalent to not using
+# furrr at all
 
-plan(multisession(workers = 10))
+plan(multisession(workers = 1))
 
 # Run Scripts ---------------------------------------------------------------------------------
+
+if (file.exists(glue("input/UPtaxon{taxon_number}.rds"))) {
+  
+  message("Found corresponding RDS file in /input. Loading...")
+  UPtaxon <- readRDS(glue("input/UPtaxon{taxon_number}.rds"))
+  
+} else {
+  
+  # Establish connection to UniProt WS, safely!
+  
+  safe_UniProt.ws <- safely(UniProt.ws)
+  
+  message("Trying to connect to UniProt web service...")
+  
+  safeUP <- safe_UniProt.ws(taxId = taxon_number)
+  
+  if (is.null(safeUP[["result"]]) == TRUE) message("Connection failed, trying again!")
+  
+  iteration_num <- 1
+  
+  while (is.null(safeUP[["result"]]) == TRUE & iteration_num < 11) {
+    
+    iteration_num <- iteration_num + 1
+    
+    message(glue("\nTrying to establish database connection, attempt {iteration_num}"))
+    safeUP <- safe_UniProt.ws(taxId = taxon_number)
+    
+  }
+  
+  UPtaxon <- safeUP[["result"]]
+  
+}
+
+message("CONNECTION SUCCEEDED.")
 
 # Load file containing locations corresponding to
 # GO terms
@@ -104,3 +142,7 @@ print(glue("Elapsed time: {totaltime} min"))
 sessionInfo() %>%
   capture.output %>%
   writeLines(glue("output/{systime}_sessionInfo.txt"))
+
+# Close the extra R sessions used by future/furrr
+
+plan(multisession(workers = 1))

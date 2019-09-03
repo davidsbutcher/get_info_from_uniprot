@@ -4,12 +4,10 @@
 
 pb <- progress_bar$new(
   format = " Creating ggplots [:bar] :percent eta: :eta :spin",
-  total = (length(results_protein) - 1),
+  total = (length(results_protein) - 2),
   clear = FALSE, width= 60)
 
-for (i in head(seq_along(results_protein), -1)) {
-  
-  setwd(here("output/png"))
+for (i in head(seq_along(results_protein), -2)) {
   
   #
   #
@@ -23,7 +21,7 @@ for (i in head(seq_along(results_protein), -1)) {
     xlim(0, 60000) +
     theme_minimal()
   
-  ggname <- glue("{basename(names(proteinlist)[i])}_proteins.png")
+  ggname <- glue("output/png/{basename(names(proteinlist)[i])}_proteins.png")
   
   ggsave(filename = ggname, plot = protein_plot, 
          device = "png", height = 5.4, width = 9.6, dpi = 600)
@@ -44,7 +42,7 @@ for (i in head(seq_along(results_protein), -1)) {
       xlim(0, 60000) +
       theme_minimal()
     
-    ggname <- glue("{basename(names(proteoformlist)[i])}_proteoforms.png")
+    ggname <- glue("output/png/{basename(names(proteoformlist)[i])}_proteoforms.png")
     
     ggsave(filename = ggname, plot = proteoform_plot, 
            device = "png", height = 5.4, width = 9.6, dpi = 600)
@@ -55,28 +53,28 @@ for (i in head(seq_along(results_protein), -1)) {
     
     ggblap <- ggarrange(protein_plot, proteoform_plot, ncol = 2)
     
-    ggname <- glue("{basename(names(proteinlist)[i])}_all.png")
+    ggname <- glue("output/png/{basename(names(proteinlist)[i])}_all.png")
     
     ggsave(filename = ggname, plot = ggblap,
            device = "png", height = 5.4, width = 9.6, dpi = 600)
     
   }
   
+  pdf(file = glue("output/pdf/{basename(names(proteinlist)[i])}.pdf"),
+      width = 8, height = 5, bg = "transparent")
+  print(protein_plot)
+  dev.off()
+  
   pb$tick()
 
-  setwd(here())
-}
+  }
 
 # Save Workspace ------------------------------------------------------------------------------
 
 # Just in case I want to see an image from a particular run of results
 
-setwd(here("output/workspace_images"))
-
-glue("{systime}_workspace_image.RData") %>% 
+glue("output/workspace_images/{systime}_workspace_image.RData") %>% 
   save.image()
-
-setwd(here())
 
 # Testing Other Output Formats ----------------------------------------------------------------
 # 
