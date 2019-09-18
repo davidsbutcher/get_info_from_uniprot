@@ -444,11 +444,11 @@ names(results_protein) <- unlist(filelist)
 names(results_protein)[length(results_protein)] <- "SUMMARY"
 
 for (i in seq_along(names(results_protein))) {
- 
+  
   # names(results_protein[i]) <- strsplit(gsub("[^[:alnum:] ]", "", names(results_protein[i])), " +")
   names(results_protein)[i] <- str_replace_all(names(results_protein[i]), "[:punct:]", "")
   names(results_protein)[i] %<>% stringr::str_trunc(28, "left") %>% paste(i, "_", ., sep = "")
-   
+  
 }
 
 setwd(here("output"))

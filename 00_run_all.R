@@ -41,7 +41,7 @@ setwd(here())
 ## You can also add the full path to a single file (including extension).
 
 filedir <- 
-  c("PEPPI_F01-F06_1mMDTT_2mMIAA.tdReport")
+  c("Z:/ICR/David Butcher/TDReports/201909_EcoliMG1655_PEPPI_M9/")
 
 # Specify false discovery rate to use for
 # rejection of hits (as decimal) when using a
@@ -69,9 +69,13 @@ go_locs_file <- "QuickGO_annotations_20190708.tsv"
 # workers = 1 is equivalent to not using
 # furrr at all
 
-plan(multisession(workers = 1))
+plan(multisession(workers = 5))
 
 # Run Scripts ---------------------------------------------------------------------------------
+
+# Check for a file in the input folder which contains the UniProt.ws
+# taxon data. If it exists, load it. Otherwise, download it SAFELY
+# trying up to 10 times
 
 if (file.exists(glue("input/UPtaxon{taxon_number}.rds"))) {
   
@@ -136,8 +140,11 @@ print(glue("Elapsed time: {totaltime} min"))
 # Optional line used to contact any Pushbullet enabled device.
 # View ?pbSetup for help
 
-# pbPost("note", "R Analysis Finished",
-#        glue("Elapsed time: {totaltime} min \nDir: {filedir}"))
+pbPost("note", "R Analysis Finished",
+       glue("Elapsed time: {totaltime} min \nDir: {filedir}"))
+
+# Session info for every run is saved to a txt file in the 
+# output directory, in case 
 
 sessionInfo() %>%
   capture.output %>%

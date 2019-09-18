@@ -7,7 +7,7 @@ pb <- progress_bar$new(
   total = (length(results_protein) - 2),
   clear = FALSE, width= 60)
 
-for (i in head(seq_along(results_protein), -2)) {
+for (i in head(seq_along(results_protein), -1)) {
   
   #
   #
@@ -18,7 +18,7 @@ for (i in head(seq_along(results_protein), -2)) {
     labs(x = "Average Mass (Da)",
          y = "Protein Count",
          title = basename(names(proteinlist)[i])) +
-    xlim(0, 60000) +
+    xlim(0, 100000) +
     theme_minimal()
   
   ggname <- glue("output/png/{basename(names(proteinlist)[i])}_proteins.png")
@@ -39,7 +39,7 @@ for (i in head(seq_along(results_protein), -2)) {
       labs(x = "Average Mass (Da)",
            y = "Proteoform Count",
            title = basename(names(proteoformlist)[i])) +
-      xlim(0, 60000) +
+      xlim(0, 100000) +
       theme_minimal()
     
     ggname <- glue("output/png/{basename(names(proteoformlist)[i])}_proteoforms.png")
@@ -60,9 +60,14 @@ for (i in head(seq_along(results_protein), -2)) {
     
   }
   
-  pdf(file = glue("output/pdf/{basename(names(proteinlist)[i])}.pdf"),
+  pdf(file = glue("output/pdf/{basename(names(proteinlist)[i])}_proteins.pdf"),
       width = 8, height = 5, bg = "transparent")
   print(protein_plot)
+  dev.off()
+  
+  pdf(file = glue("output/pdf/{basename(names(proteinlist)[i])}_proteoforms.pdf"),
+      width = 8, height = 5, bg = "transparent")
+  print(proteoform_plot)
   dev.off()
   
   pb$tick()

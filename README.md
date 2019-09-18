@@ -1,3 +1,4 @@
+
 # Get Info from UniProt
 
 Process TDReports or flat files by getting information from the UniProt webservice and filtering by a selectable FDR value. Install the necessary packages, set input parameters and source "00_run_all.R" to process data.
@@ -17,11 +18,11 @@ All input parameters are given in 00_run_all.R, in the "Initialize Parameters" s
 
 - `fdr <- 0.01` This is the value used for the False Detection Rate cutoff. Defaults to 0.01 (1% FDR).
 
-- `UPtaxon <- UniProt.ws(83333)` UniProt taxon number for organism of interest. Defaults to 83333 for *E. coli* K12. Value for *Homo sapiens* is 9606.
+- `taxon_number <- 83333` UniProt taxon number for organism of interest. Defaults to 83333 for *E. coli* K12. Value for *Homo sapiens* is 9606. Taxons 83333 and 9606 are predownloaded (in /input), any other taxon number will take a minute to download.
 
 - `go_locs_file <- "QuickGO_annotations_20190708.tsv"` This file will be used to determine which GO terms correspond to subcellular locations. This should not need to be changed.
 
-- `plan(multisession(workers = 10))` This is a parameter needed by the furrr package. It designates the number of simultaenous R sessions used for data processing. Using 10 workers allows for 10 files to be processed simultaneously, but uses a lot of system resources. Drop this number on weaker systems.
+- `plan(multisession(workers = 10))` This is a parameter needed by the furrr package. It designates the number of simultaenous R sessions used for data processing. Using 10 workers allows for 10 files to be processed simultaneously, but uses a lot of system resources. Drop this number on weaker systems or if <10 files are being processed.
 
 ## Analysis
 
@@ -42,4 +43,8 @@ For TD Report files, minimum Q value from among all hits, average and monoisotop
 Output files are saved to the output directory. All files are timestamped with the time the script was initialized. Protein results are saved to "YYYYMMDD_hhmmss_protein_results.xlsx" and proteoform results are saved to "YYYYMMDD_hhmmss_proteoform_results.xlsx". Output xlsx files contain sheets corresponding to each input file and a final summary sheet containing all filenames and counts of cytosolic/membrane proteins.
 
 For all protein/proteform results a histogram is created showing the distribution of molecular weights and saved to the output/png folder.
+
+### Pushbullet Notification
+
+If your phone or browser are set up for Pushbullet notification, a message can be sent to alert you of the script being finished. Check the function pbSetup in the RPushBullet package for more info.
 
