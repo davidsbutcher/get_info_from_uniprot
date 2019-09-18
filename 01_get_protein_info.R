@@ -33,6 +33,7 @@ read_tdreport <- function(tdreport, fdr_cutoff = 0.01) {
   message(glue("\nEstablishing connection to {basename(tdreport)}..."))
 
   #Establish database connection. Keep trying until it works!
+  #
    
   safe_dbConnect <- safely(dbConnect)
   
