@@ -17,6 +17,7 @@ library(Peptides)
 library(magrittr)
 library(writexl)
 library(readxl)
+library(openxlsx)
 library(DBI)
 library(RSQLite)
 library(GO.db)
@@ -41,7 +42,7 @@ setwd(here())
 ## You can also add the full path to a single file (including extension).
 
 filedir <- 
-  c("Z:/ICR/David Butcher/TDReports/201909_EcoliMG1655_PEPPI_M9/")
+  c("Z:/ICR/David Butcher/TDReports/20190913_EcoliMG1655WCL_columnheater/")
 
 # Specify false discovery rate to use for
 # rejection of hits (as decimal) when using a
@@ -69,9 +70,10 @@ go_locs_file <- "QuickGO_annotations_20190708.tsv"
 # workers = 1 is equivalent to not using
 # furrr at all
 
-plan(multisession(workers = 5))
+plan(multisession(workers = 2))
 
-# Run Scripts ---------------------------------------------------------------------------------
+
+# Load data ---------------------------------------------------------------
 
 # Check for a file in the input folder which contains the UniProt.ws
 # taxon data. If it exists, load it. Otherwise, download it SAFELY
@@ -120,6 +122,8 @@ go_locs <- go_locs_file %>%
   unique() %>%
   pull()
 
+# Run Scripts ---------------------------------------------------------------------------------
+
 # Save start time to variable for use in output filenames
 
 systime <- format(Sys.time(), "%Y%m%d_%H%M%S")
@@ -132,7 +136,7 @@ source("03_output_plots.R")
 
 totaltime <- capture.output(toc()) %>%
   str_extract("[0-9]+") %>%
-  as.numeric %>% 
+  as.numeric %>%
   `/`(60) %>% round(digits = 2)
 
 print(glue("Elapsed time: {totaltime} min"))

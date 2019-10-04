@@ -7,7 +7,7 @@ pb <- progress_bar$new(
   total = (length(results_protein) - 2),
   clear = FALSE, width= 60)
 
-for (i in head(seq_along(results_protein), -1)) {
+for (i in head(seq_along(results_protein), - 1)) {
   
   #
   #
