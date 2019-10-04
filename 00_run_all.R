@@ -42,7 +42,7 @@ setwd(here())
 ## You can also add the full path to a single file (including extension).
 
 filedir <- 
-  c("Z:/ICR/David Butcher/TDReports/20190913_EcoliMG1655WCL_columnheater/")
+  c("Z:/ICR/David Butcher/TDReports/20190913_EcoliMG1655WCL_columnheater/20190916_EcoliMG1655WCL_LB-B-20190515_normflow.tdReport")
 
 # Specify false discovery rate to use for
 # rejection of hits (as decimal) when using a
@@ -70,7 +70,7 @@ go_locs_file <- "QuickGO_annotations_20190708.tsv"
 # workers = 1 is equivalent to not using
 # furrr at all
 
-plan(multisession(workers = 2))
+plan(multisession(workers = 1))
 
 
 # Load data ---------------------------------------------------------------

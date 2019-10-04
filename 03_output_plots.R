@@ -2,10 +2,10 @@
 
 # Make ggplots --------------------------------------------------------------------------------
 
-pb <- progress_bar$new(
-  format = " Creating ggplots [:bar] :percent eta: :eta :spin",
-  total = (length(results_protein) - 2),
-  clear = FALSE, width= 60)
+# pb <- progress_bar$new(
+#   format = " Creating ggplots [:bar] :percent eta: :eta :spin",
+#   total = (length(results_protein) - 2),
+#   clear = FALSE, width= 60)
 
 for (i in head(seq_along(results_protein), - 1)) {
   
@@ -70,7 +70,7 @@ for (i in head(seq_along(results_protein), - 1)) {
   print(proteoform_plot)
   dev.off()
   
-  pb$tick()
+  # pb$tick()
 
   }
 
