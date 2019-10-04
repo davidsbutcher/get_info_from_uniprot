@@ -174,6 +174,223 @@ read_tdreport <- function(tdreport, fdr_cutoff = 0.01) {
   
 }
 
+read_tdreport_full <- function(tdreport, fdr_cutoff = 0.01) {
+  
+  # This function will return ALL hits above Q value threshold, not only the one
+  # with the lowest Q value. 
+  # Output is a tibble with all proteins hits below
+  # FDR cutoff
+  
+  message(glue("\nEstablishing connection to {basename(tdreport)}..."))
+  
+  #Establish database connection. Keep trying until it works!
+  
+  safe_dbConnect <- safely(dbConnect)
+  
+  safecon <- safe_dbConnect(RSQLite::SQLite(), ":memory:", dbname = tdreport)
+  
+  if (is.null(safecon[["result"]]) == TRUE) message("Connection failed, trying again!")
+  
+  iteration_num <- 1
+  
+  while (is.null(safecon[["result"]]) == TRUE & iteration_num < 500) {
+    
+    iteration_num <- iteration_num + 1
+    
+    message(glue("\nTrying to establish database connection, attempt {iteration_num}"))
+    safecon <- safe_dbConnect(RSQLite::SQLite(), ":memory:",
+                              dbname = tdreport,
+                              synchronous = NULL)
+    
+  }
+  
+  if (is.null(safecon[["result"]]) == TRUE) stop("Failed to connect using SQLite!")
+  
+  con <- safecon[["result"]]
+  
+  # Get relevant tables from TDReport using SQL
+  
+  {
+    datafile <- con %>%
+    RSQLite::dbGetQuery("SELECT Id, Name 
+                        FROM DataFile") %>%
+    as_tibble %>% 
+    rename("DataFileId" = Id) %>% 
+    rename("filename" = Name)
+  
+  isoform <- con %>%
+    RSQLite::dbGetQuery("SELECT Id, AccessionNumber 
+                        FROM Isoform") %>%
+    as_tibble %>% 
+    rename("IsoformId" = Id)
+  
+  bioproteoform <- con %>%
+    RSQLite::dbGetQuery("SELECT IsoformId, ChemicalProteoformId
+                        FROM BiologicalProteoform") %>%
+    as_tibble
+  
+  hit <- con %>%
+    RSQLite::dbGetQuery("SELECT Id, DataFileId, ChemicalProteoformId
+                        FROM Hit") %>%
+    as_tibble %>% 
+    rename("HitId" = Id)
+  
+  
+  entry <- con %>%
+    RSQLite::dbGetQuery("SELECT Id, AccessionNumber
+                        FROM Entry") %>%
+    as_tibble %>% 
+    rename("EntryId" = Id)
+  
+  # Get Qvals and other info from "GlobalQualitativeConfidence"
+  # table, put it into a new tibble. Remove all values for Q
+  # values less than FDR cutoff
+  
+  q_vals <- con %>%
+    RSQLite::dbGetQuery("SELECT Id, ExternalId, GlobalQvalue, HitId
+                        FROM GlobalQualitativeConfidence") %>%
+    as_tibble %>%
+    filter(.$ExternalId != 0) %>%
+    filter(.$GlobalQvalue <= fdr_cutoff) %>%
+    rename("EntryId" = ExternalId)
+  
+  }
+
+  allproteinhits <- 
+    left_join(isoform, bioproteoform) %>%
+    left_join(hit %>%
+                filter(HitId %in% q_vals$HitId),
+              by = "ChemicalProteoformId") %>%
+    left_join(q_vals) %>% 
+    select(-c(ChemicalProteoformId, Id, EntryId, HitId)) %>% 
+    left_join(datafile) %>% 
+    drop_na
+  
+  output <- allproteinhits
+  
+  setwd(here())
+  
+  # Close database connection and return output table
+  
+  dbDisconnect(con)
+  
+  message("read_tdreport_byfilename Finished!")
+  
+  return(output)
+  
+}
+
+read_tdreport_byfilename <- function(tdreport, fdr_cutoff = 0.01) {
+  
+  # This function will return ALL hits above Q value threshold, not only the one
+  # with the lowest Q value. 
+  # Output is a tibble with all proteins split up by filename
+  
+  message(glue("\nEstablishing connection to {basename(tdreport)}..."))
+  
+  #Establish database connection. Keep trying until it works!
+  
+  safe_dbConnect <- safely(dbConnect)
+  
+  safecon <- safe_dbConnect(RSQLite::SQLite(), ":memory:", dbname = tdreport)
+  
+  if (is.null(safecon[["result"]]) == TRUE) message("Connection failed, trying again!")
+  
+  iteration_num <- 1
+  
+  while (is.null(safecon[["result"]]) == TRUE & iteration_num < 500) {
+    
+    iteration_num <- iteration_num + 1
+    
+    message(glue("\nTrying to establish database connection, attempt {iteration_num}"))
+    safecon <- safe_dbConnect(RSQLite::SQLite(), ":memory:",
+                              dbname = tdreport,
+                              synchronous = NULL)
+    
+  }
+  
+  if (is.null(safecon[["result"]]) == TRUE) stop("Failed to connect using SQLite!")
+  
+  con <- safecon[["result"]]
+  
+  # Get relevant tables from TDReport using SQL
+  {
+    datafile <- con %>%
+      RSQLite::dbGetQuery("SELECT Id, Name 
+                        FROM DataFile") %>%
+      as_tibble %>% 
+      rename("DataFileId" = Id) %>% 
+      rename("filename" = Name)
+    
+    isoform <- con %>%
+      RSQLite::dbGetQuery("SELECT Id, AccessionNumber 
+                        FROM Isoform") %>%
+      as_tibble %>% 
+      rename("IsoformId" = Id)
+    
+    bioproteoform <- con %>%
+      RSQLite::dbGetQuery("SELECT IsoformId, ChemicalProteoformId
+                        FROM BiologicalProteoform") %>%
+      as_tibble
+    
+    hit <- con %>%
+      RSQLite::dbGetQuery("SELECT Id, DataFileId, ChemicalProteoformId
+                        FROM Hit") %>%
+      as_tibble %>% 
+      rename("HitId" = Id)
+    
+    
+    entry <- con %>%
+      RSQLite::dbGetQuery("SELECT Id, AccessionNumber
+                        FROM Entry") %>%
+      as_tibble %>% 
+      rename("EntryId" = Id)
+    
+    # Get Qvals and other info from "GlobalQualitativeConfidence"
+    # table, put it into a new tibble. Remove all values for Q
+    # values less than FDR cutoff
+    
+    q_vals <- con %>%
+      RSQLite::dbGetQuery("SELECT Id, ExternalId, GlobalQvalue, HitId
+                        FROM GlobalQualitativeConfidence") %>%
+      as_tibble %>%
+      filter(.$ExternalId != 0) %>%
+      filter(.$GlobalQvalue <= fdr_cutoff) %>%
+      rename("EntryId" = ExternalId)
+    
+  }
+  
+  allproteinhits <- 
+    left_join(isoform, bioproteoform) %>%
+    left_join(hit %>%
+                filter(HitId %in% q_vals$HitId),
+              by = "ChemicalProteoformId") %>%
+    left_join(q_vals) %>% 
+    select(-c(ChemicalProteoformId, Id, EntryId, HitId)) %>% 
+    left_join(datafile) %>% 
+    drop_na
+  
+  proteinhitsbyfilename <- 
+    allproteinhits %>% 
+    select(-c("DataFileId", "IsoformId", "GlobalQvalue")) %>% 
+    pivot_wider(names_from = "filename",
+                values_from = "AccessionNumber",
+                values_fn = list(AccessionNumber = list))
+  
+  output <- proteinhitsbyfilename
+  
+  setwd(here())
+  
+  # Close database connection and return output table
+  
+  dbDisconnect(con)
+  
+  message("read_tdreport_full Finished!")
+  
+  return(output)
+  
+}
+
 getuniprotinfo <- function(tbl, taxon = NULL, tdreport = TRUE) {
   
   message("Retrieving info for from UniProt...")
@@ -352,6 +569,39 @@ getlocations <- function(resultslist) {
   return(counts)
 }
 
+savePLBF <- function(input_tbbl, filename) {
+  
+  # Save proteinlist by filename
+  
+  workbook <- createWorkbook()
+  
+  shortfilename <- 
+    filename %>%
+    basename %>%
+    file_path_sans_ext %>% 
+    str_trunc(30, "left")
+  
+  workbook %>% addWorksheet(shortfilename)
+  
+  for (i in seq_along(input_tbbl)) {
+    
+    workbook %>% writeData(shortfilename,
+                           names(input_tbbl)[[i]],
+                           startCol = i,
+                           startRow = 1)
+    
+    
+    workbook %>% writeData(shortfilename,
+                           pull(input_tbbl, i) %>% as_vector %>% unique,
+                           startCol = i,
+                           startRow = 2)
+    
+  }
+  
+  return(workbook)
+  
+}
+
 # Read Data Files -----------------------------------------------------------------------------
 
 # Data files must
@@ -364,12 +614,16 @@ if (file.exists(filedir) == TRUE) {
   filelist <- filedir %>% as.list() %>% kickout
   filedir %<>% dirname()
   
+  names(filelist) <- seq(1, length(filelist))
+  
 } else {
-
-filelist <- filedir %>%
-  list.files(recursive = T, include.dirs = T, full.names = T) %>%
-  as.list %>% kickout
-
+  
+  filelist <- filedir %>%
+    list.files(recursive = T, include.dirs = T, full.names = T) %>%
+    as.list %>% kickout
+  
+  names(filelist) <- seq(1, length(filelist))
+  
 }
 
 setwd(filedir)
@@ -400,6 +654,15 @@ if (length(unique(extension)) > 1) {
   
   message("Reading protein data from tdReport...")
   proteinlist <- filelist %>% future_map(read_tdreport, fdr_cutoff = fdr)
+  
+  message("Reading full protein data from tdReport...")
+  proteinlistfull <- filelist %>% 
+    future_map(read_tdreport_full, fdr_cutoff = fdr)
+  
+  message("Reading full protein data from tdReport...")
+  proteinlistbyfilename <- filelist %>% 
+    future_map(read_tdreport_byfilename, fdr_cutoff = fdr)
+
   tdreport_file <- TRUE
   
 } else {
@@ -420,9 +683,7 @@ results_protein <- proteinlist %>%
   future_map(getuniprotinfo, taxon = UPtaxon,
              tdreport = tdreport_file,
              .progress = TRUE) %>%
-  map(as_tibble)
-
-results_protein %<>%
+  map(as_tibble) %>% 
   future_map2(filelist, getGOterms, .progress = TRUE) %>% 
   map(addmasses)
 
@@ -433,7 +694,7 @@ results_protein[[length(results_protein)+1]] <- getlocations(results_protein)
 # An xlsx file with sheets corresponding to files in /data is written to
 # the project directory
 
-# If systime doesn't exists (i.e. script is not being run from 00_run_all)
+# If systime doesn't exist (i.e. script is not being run from 00_run_all)
 # create the systime variable
 
 if (exists("systime") == FALSE) systime <- format(Sys.time(), "%Y%m%d_%H%M%S")
@@ -441,21 +702,53 @@ if (exists("systime") == FALSE) systime <- format(Sys.time(), "%Y%m%d_%H%M%S")
 resultsname <- glue("{systime}_protein_results.xlsx")
 resultsobjectname <- glue("{systime}_protein_results.rds")
 
-names(results_protein) <- unlist(filelist)
+names(results_protein) <- unlist(filelist) %>% basename
 names(results_protein)[length(results_protein)] <- "SUMMARY"
 
+names(proteinlistfull) <- unlist(filelist) %>% basename
+
 for (i in seq_along(names(results_protein))) {
+
+  names(results_protein)[i] <- 
+    str_replace_all(names(results_protein[i]), "[:punct:]", "")
   
-  # names(results_protein[i]) <- strsplit(gsub("[^[:alnum:] ]", "", names(results_protein[i])), " +")
-  names(results_protein)[i] <- str_replace_all(names(results_protein[i]), "[:punct:]", "")
-  names(results_protein)[i] %<>% stringr::str_trunc(28, "left") %>% paste(i, "_", ., sep = "")
-  
+  names(results_protein)[i] %<>% 
+    stringr::str_trunc(28, "left") %>% paste(i, "_", ., sep = "")
+
 }
 
 setwd(here("output"))
 
+
+# Save protein results ----------------------------------------------------
+
 results_protein %>%
   writexl::write_xlsx(path = resultsname)
+
+PLFnameslist <- 
+  filelist %>%
+  map(basename) %>%
+  map(file_path_sans_ext) %>%
+  glue_data("allproteinhits/{.}.xlsx") %>% 
+  as.list
+
+  map2(proteinlistfull, PLFnameslist, ~write_xlsx(.x, path = .y))
+
+# Save list of proteins by filename ---------------------------------------
+
+PLBFlist <- 
+map2(proteinlistbyfilename, filelist, savePLBF)
+
+PLBFnameslist <- 
+  filelist %>%
+  map(basename) %>%
+  map(file_path_sans_ext) %>%
+  glue_data("proteinsbydatafile/{.}.xlsx") %>% 
+  as.list
+
+map2(PLBFlist, PLBFnameslist, ~saveWorkbook(.x, .y, overwrite = TRUE))
+
+# Save RDS ----------------------------------------------------------------
 
 results_protein %>%
   saveRDS(file = glue("rds/{resultsobjectname}"))
