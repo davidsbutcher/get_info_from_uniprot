@@ -212,48 +212,55 @@ read_tdreport_full <- function(tdreport, fdr_cutoff = 0.01) {
   
   {
     datafile <- con %>%
-    RSQLite::dbGetQuery("SELECT Id, Name 
+      RSQLite::dbGetQuery("SELECT Id, Name 
                         FROM DataFile") %>%
-    as_tibble %>% 
-    rename("DataFileId" = Id) %>% 
-    rename("filename" = Name)
-  
-  isoform <- con %>%
-    RSQLite::dbGetQuery("SELECT Id, AccessionNumber 
+      as_tibble %>% 
+      rename("DataFileId" = Id) %>% 
+      rename("filename" = Name)
+    
+    resultset <- con %>%
+      RSQLite::dbGetQuery("SELECT Id, Name 
+                        FROM ResultSet") %>%
+      as_tibble %>% 
+      rename("ResultSetId" = Id) %>% 
+      rename("ResultSetName" = Name)
+    
+    isoform <- con %>%
+      RSQLite::dbGetQuery("SELECT Id, AccessionNumber 
                         FROM Isoform") %>%
-    as_tibble %>% 
-    rename("IsoformId" = Id)
-  
-  bioproteoform <- con %>%
-    RSQLite::dbGetQuery("SELECT IsoformId, ChemicalProteoformId
+      as_tibble %>% 
+      rename("IsoformId" = Id)
+    
+    bioproteoform <- con %>%
+      RSQLite::dbGetQuery("SELECT IsoformId, ChemicalProteoformId
                         FROM BiologicalProteoform") %>%
-    as_tibble
-  
-  hit <- con %>%
-    RSQLite::dbGetQuery("SELECT Id, DataFileId, ChemicalProteoformId
+      as_tibble
+    
+    hit <- con %>%
+      RSQLite::dbGetQuery("SELECT Id, ResultSetId, DataFileId, ChemicalProteoformId
                         FROM Hit") %>%
-    as_tibble %>% 
-    rename("HitId" = Id)
-  
-  
-  entry <- con %>%
-    RSQLite::dbGetQuery("SELECT Id, AccessionNumber
+      as_tibble %>% 
+      rename("HitId" = Id)
+    
+    
+    entry <- con %>%
+      RSQLite::dbGetQuery("SELECT Id, AccessionNumber
                         FROM Entry") %>%
-    as_tibble %>% 
-    rename("EntryId" = Id)
-  
-  # Get Qvals and other info from "GlobalQualitativeConfidence"
-  # table, put it into a new tibble. Remove all values for Q
-  # values less than FDR cutoff
-  
-  q_vals <- con %>%
-    RSQLite::dbGetQuery("SELECT Id, ExternalId, GlobalQvalue, HitId
+      as_tibble %>% 
+      rename("EntryId" = Id)
+    
+    # Get Qvals and other info from "GlobalQualitativeConfidence"
+    # table, put it into a new tibble. Remove all values for Q
+    # values less than FDR cutoff
+    
+    q_vals <- con %>%
+      RSQLite::dbGetQuery("SELECT Id, ExternalId, GlobalQvalue, HitId
                         FROM GlobalQualitativeConfidence") %>%
-    as_tibble %>%
-    filter(.$ExternalId != 0) %>%
-    filter(.$GlobalQvalue <= fdr_cutoff) %>%
-    rename("EntryId" = ExternalId)
-  
+      as_tibble %>%
+      filter(.$ExternalId != 0) %>%
+      filter(.$GlobalQvalue <= fdr_cutoff) %>%
+      rename("EntryId" = ExternalId)
+    
   }
 
   allproteinhits <- 
@@ -264,6 +271,7 @@ read_tdreport_full <- function(tdreport, fdr_cutoff = 0.01) {
     left_join(q_vals) %>% 
     select(-c(ChemicalProteoformId, Id, EntryId, HitId)) %>% 
     left_join(datafile) %>% 
+    left_join(resultset) %>%
     drop_na
   
   output <- allproteinhits
