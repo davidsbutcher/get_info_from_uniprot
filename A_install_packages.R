@@ -12,6 +12,8 @@ if(!require(writexl)) install.packages("writexl")
 
 if(!require(readxl)) install.packages("readxl")
 
+if(!require(readxl)) install.packages("openxlsx")
+
 if(!require(RSQLite)) install.packages("RSQLite")
 
 if(!require(tools)) install.packages("tools")
