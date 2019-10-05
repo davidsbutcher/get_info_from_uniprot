@@ -1,7 +1,7 @@
 
 # Get UniProt Protein Info (GUPPI)
 
-Process TDReports or flat files by getting information from the UniProt webservice and filtering by a selectable FDR value. Install the necessary packages, set input parameters and source "00_run_all.R" to process data.
+Process TDReports or flat files by getting information from the UniProt webservice and filtering by a selectable FDR value. Install the necessary packages (using `A_install.packages.R`), set input parameters and source `00_run_all.R` to process data.
 
 ## Input
 
@@ -17,25 +17,29 @@ All input parameters are given in 00_run_all.R, in the "Initialize Parameters" s
 
 - `fdr <- 0.01` This is the value used for the False Detection Rate cutoff. Defaults to 0.01 (1% FDR).
 
-- `taxon_number <- 83333` UniProt taxon number for organism of interest. Defaults to 83333 for *E. coli* K12. Value for *Homo sapiens* is 9606. Taxons 83333 and 9606 are predownloaded (in /input), any other taxon number will take a minute to download.
+- `taxon_number <- 83333` UniProt taxon number for organism of interest. Defaults to 83333 for *E. coli* K12. Value for *Homo sapiens* is 9606. Taxons 83333 and 9606 are predownloaded (in /input), any other taxon number will take some time to download (about 20 minutes for taxon 83333).
 
 - `go_locs_file <- "QuickGO_annotations_20190708.tsv"` This file will be used to determine which GO terms correspond to subcellular locations. This should not need to be changed.
 
-- `plan(multisession(workers = 10))` This is a parameter needed by the furrr package. It designates the number of simultaenous R sessions used for data processing. Using 10 workers allows for 10 files to be processed simultaneously, but uses a lot of system resources. Drop this number on weaker systems or if <10 files are being processed. If processing fewer than 10 files, set the number of workers to the number of files to avoid system slowdown.
+- `plan(multisession(workers = 10))` This is a parameter needed by the furrr package. It designates the number of simultaenous R sessions used for data processing. Using 10 workers allows for 10 files to be processed simultaneously, but uses a lot of system resources. Drop this number on weaker systems or if <10 files are being processed.
+
+- `use_PB <- FALSE` Optional parameter. If set to true, `RPushbullet` will be used to send a Pushbullet notification to your device when the analysis is finished. See `?RPushbullet::pbSetup` for more info.
 
 ## Analysis
 
 ### Flat Files
 
-The UniProt web service is queried for all UniProt accession numbers in the file using the package `UniProt.ws`. If a corresponding entry is found then protein name, organism, organism taxon ID, protein sequence, protein function, subcellular location, and any associated GO IDs are returned. Note that some of these values may not be found and come back as empty or NA. GO terms are obtained for all GO IDs using the `GO.db` package and terms corresponding to subcellular locations are saved in column "GO_subcellular_locations". Average and monoisotopic masses are determined using the `Peptides` package.
+The taxon number is checked against files in the `/input` directory to see if a corresponding UniProt taxon database has already been downloaded. If not, the UniProt web service is queried for all UniProt accession numbers in the taxon using the package `UniProt.ws`. Protein name, organism, organism taxon ID, protein sequence, protein function, subcellular location, and any associated GO IDs are returned. Note that some of these values may not be found and come back as empty or NA. 
+
+The UniProt taxon database is used to add information for all accession number entries in the flat file. GO terms are obtained for all GO IDs using the `GO.db` package and terms corresponding to subcellular locations are saved in column "GO_subcellular_locations". Average and monoisotopic masses are determined using the `Peptides` package.
 
 ### TD Reports
 
-A connection is established to the SQLite database in the TD Report using `RSQLite`. All protein isoform accession numbers are obtained, as well as the lowest Q value from among all hits for each  isoform and the name of the data file from which the lowest Q value hit was obtained. All isoforms with Q values which are missing or greater than the cutoff value are deleted.
+A connection is established to the SQLite database in the TD Report using `RSQLite`. The "main" output includes all protein isoform accession numbers with the lowest Q value from among all hits for each isoform and the name of the data file from which the lowest Q value hit was obtained.  All isoforms with Q values which are missing or greater than the cutoff value are deleted. Output is also generated which contains all hits for all isoforms that are above the FDR cutoff (`/allproteinhits`) and lowest Q-value hits sorted by data file (`/proteinsbydatafile`).
 
-The UniProt web service is queried for all remaining UniProt accession numbers using the package `UniProt.ws`. If a corresponding entry is found then protein name, organism, organism taxon ID, protein sequence, protein function, subcellular location, and any associated GO IDs are returned. Note that some of these values may not be found and come back as empty or NA. GO terms are obtained for all GO IDs using the `GO.db` package and terms corresponding to subcellular locations are saved in column "GO_subcellular_locations".  Average and monoisotopic masses are taken directly from the value in the TD Report.
+UniProt data is added as detailed in the `Flat Files` section, with the exception that average and monoisotopic masses are taken directly from the tdReport file.
 
-For TD Report files, minimum Q value from among all hits, average and monoisotopic masses, and data file for lowest Q value hit are obtained for all proteoforms. Proteoforms with Q values or corresponding protein entry Q values above the FDR cutoff are deleted. UniProt info for every unique proteoform record number is copied from corresponding protein entries to avoid wasting time by querying the UniProt web service again.
+Minimum Q value from among all hits, average and monoisotopic masses, and data file for lowest Q value hit are obtained for all proteoforms. Proteoforms whose Q values are above the FDR cutoff are deleted. Proteoforms whose corresponding protein isoform entry is above the FDR cutoff are also deleted. UniProt info for every unique proteoform record number is copied from corresponding protein entries to avoid wasting time by querying the UniProt database again.
 
 ## Output
 
@@ -47,9 +51,4 @@ Output files are saved to the output directory. Files are timestamped with the t
 * Lists of all protein hits including UniProt accession number, Q value, data file, result type (i.e. tight absolute mass, find unexpected modifications, or biomarker) are saved to `output/allproteinhits` and share names with input files.
 * Lists of all unique protein hits for each data file in a TDReport (intended for use in UpSet plots, pie charts, waffle plots, etc.) are saved to `output/proteinsbydatafile`.
 * Mass histograms for identified proteins and proteoforms are saved to `/png` and `/pdf` in the corresponding formats.
-* Workspace images (R objects) are saved to `output/workspace_images`.
-
-### Pushbullet Notification
-
-If your phone or web browser are set up for Pushbullet notification, a message can be sent to alert you of the script being finished. Check the function pbSetup in the RPushBullet package for more info.
-
+* Workspace images (.Rdata file containing all R objects) from the end of the analysis are saved to `output/workspace_images`.
