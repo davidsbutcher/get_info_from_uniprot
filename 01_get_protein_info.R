@@ -486,7 +486,7 @@ getuniprotinfo <- function(tbl, taxon = NULL, tdreport = TRUE) {
   
 }
 
-getuniprotinfo2 <- function(listofproteins, taxon = NULL, database = NULL) {
+getuniprotinfo2 <- function(listofproteins, taxon = NULL, database = NULL, tdrep = TRUE) {
   
   message("Retrieving info from UniProt...")
   
@@ -496,8 +496,16 @@ getuniprotinfo2 <- function(listofproteins, taxon = NULL, database = NULL) {
   accession_name <- grep("accession", names(listofproteins),
                          ignore.case = TRUE, value = TRUE)
   
-  listofproteins <- listofproteins %>% 
-    dplyr::select(-c(Id), "UNIPROTKB" := !!accession_name)
+  if (tdrep == TRUE) {
+    
+    listofproteins <- listofproteins %>% 
+      dplyr::select(-c(Id), "UNIPROTKB" := !!accession_name)
+    
+  } else {
+    
+    listofproteins <- tibble(UNIPROTKB = pull(listofproteins, accession_name))
+    
+  }
   
   left_join(listofproteins, database)
   
@@ -638,7 +646,7 @@ savePLBF <- function(input_tbbl, filename) {
 if (file.exists(filedir) == TRUE) {
   
   filelist <- filedir %>% as.list() %>% kickout
-  filedir %<>% dirname()
+  filedir <- filedir %>% dirname()
   
   names(filelist) <- seq(1, length(filelist))
   
@@ -733,7 +741,8 @@ if (glue("input/{taxon_number}_full_UniProt_database.rds") %>%
 results_protein <- proteinlist %>%
   future_map(getuniprotinfo2,
              taxon = taxon_number,
-             database = UPdatabase) %>% 
+             database = UPdatabase,
+             tdrep = tdreport_file) %>% 
   future_map2(filelist, getGOterms, .progress = TRUE) %>% 
   map(addmasses)
   
@@ -755,8 +764,6 @@ resultsobjectname <- glue("{systime}_protein_results.rds")
 names(results_protein) <- unlist(filelist) %>% basename
 names(results_protein)[length(results_protein)] <- "SUMMARY"
 
-names(proteinlistfull) <- unlist(filelist) %>% basename
-
 for (i in seq_along(names(results_protein))) {
 
   names(results_protein)[i] <- 
@@ -775,28 +782,36 @@ setwd(here("output"))
 results_protein %>%
   writexl::write_xlsx(path = resultsname)
 
-PLFnameslist <- 
-  filelist %>%
-  map(basename) %>%
-  map(file_path_sans_ext) %>%
-  glue_data("allproteinhits/{.}.xlsx") %>% 
-  as.list
-
+if (tdreport_file == TRUE) {
+  
+  # Save protein results, all hits ------------------------------------------
+  
+  names(proteinlistfull) <- unlist(filelist) %>% basename
+  
+  PLFnameslist <- 
+    filelist %>%
+    map(basename) %>%
+    map(file_path_sans_ext) %>%
+    glue_data("allproteinhits/{.}.xlsx") %>% 
+    as.list
+  
   map2(proteinlistfull, PLFnameslist, ~write_xlsx(.x, path = .y))
-
-# Save list of proteins by filename ---------------------------------------
-
-PLBFlist <- 
-map2(proteinlistbyfilename, filelist, savePLBF)
-
-PLBFnameslist <- 
-  filelist %>%
-  map(basename) %>%
-  map(file_path_sans_ext) %>%
-  glue_data("proteinsbydatafile/{.}.xlsx") %>% 
-  as.list
-
-map2(PLBFlist, PLBFnameslist, ~saveWorkbook(.x, .y, overwrite = TRUE))
+  
+  # Save list of proteins by filename ---------------------------------------
+  
+  PLBFlist <- 
+    map2(proteinlistbyfilename, filelist, savePLBF)
+  
+  PLBFnameslist <- 
+    filelist %>%
+    map(basename) %>%
+    map(file_path_sans_ext) %>%
+    glue_data("proteinsbydatafile/{.}.xlsx") %>% 
+    as.list
+  
+  map2(PLBFlist, PLBFnameslist, ~saveWorkbook(.x, .y, overwrite = TRUE))
+  
+}
 
 # Save RDS ----------------------------------------------------------------
 
