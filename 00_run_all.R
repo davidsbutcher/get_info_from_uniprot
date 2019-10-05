@@ -35,18 +35,17 @@ library(tidyverse)
 
 setwd(here())
 
-## Add a directory with files to scan. By default all subdirectories 
-## will be checked UNLESS the directory has "deprecated" in its name.
-## MAKE SURE TO ADD THE FINAL FORWARD SLASH for directories
-## All input files must be csv, xlsx, or tdReport files.
-## You can also add the full path to a single file (including extension).
+# Add a directory with files to scan. By default all subdirectories
+# will be checked UNLESS the directory has "deprecated" in its name.
+# MAKE SURE TO ADD THE FINAL FORWARD SLASH for directories
+# All input files must be csv, xlsx, or tdReport files.
+# You can also add the full path to a single file (including extension).
 
 filedir <- 
   c("Z:/ICR/David Butcher/TDReports/peppi_f03_1dtt_2iaa.csv")
 
-# Specify false discovery rate to use for
-# rejection of hits (as decimal) when using a
-# tdReport as input - 0.01 is 1% FDR
+# Specify false discovery rate to use for rejection of hits (as decimal)
+# when using a tdReport as input - 0.01 is 1% FDR
 
 fdr <- 0.01
 
@@ -63,15 +62,15 @@ taxon_number <- 83333
 
 go_locs_file <- "QuickGO_annotations_20190708.tsv"
 
-# Need to run this command for furrr. If 10
-# is too many sessions for your system try 5.
-# If running <10 files, change workers
-# to be equal to number of files.
-# workers = 1 is equivalent to not using
-# furrr at all
+# Need to run this command for furrr. If 10 is too many sessions for your
+# system try 5. If running <10 files, change workers to be equal to number
+# of files. workers = 1 is equivalent to not using furrr at all
 
 plan(multisession(workers = 1))
 
+# Should PushBullet be used to notify when the script is finished?
+
+use_PB <- FALSE
 
 # Load data ---------------------------------------------------------------
 
@@ -144,8 +143,12 @@ print(glue("Elapsed time: {totaltime} min"))
 # Optional line used to contact any Pushbullet enabled device.
 # View ?pbSetup for help
 
+if (use_PB == TRUE) {
+
 pbPost("note", "R Analysis Finished",
        glue("Elapsed time: {totaltime} min \nDir: {filedir}"))
+  
+}
 
 # Session info for every run is saved to a txt file in the 
 # output directory, in case 
