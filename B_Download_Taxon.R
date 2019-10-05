@@ -22,52 +22,50 @@ accession_numbers <- UPtaxon@taxIdUniprots
 
 # Download Data -----------------------------------------------------------
 
-message("Retrieving info from UniProt...")
-
 results <- tibble()
+
+oldworkernum <- nbrOfWorkers()
+plan(multisession(workers = 5))
 
 # Create a safe version of UniProt.ws which will not crash
 # the whole damn program if it fails
 
-accession_chunks <- chunk2(accession_numbers, 200)
+numberofchunks <- ceiling(length(accession_numbers)/100)
+
+accession_chunks <- chunk2(accession_numbers, numberofchunks)
 
 safeselect <- safely(UniProt.ws::select)
 
-glue("There are a total of {length(accession_chunks)} chunks") %>% 
+glue("There are {length(accession_chunks)} chunks") %>% 
   message
 
-pb <- progress_bar$new(
-  format = "  Accessing UniProt [:bar] :percent eta: :eta :spin",
-  total = length(accession_chunks),
-  clear = FALSE, width= 60)
+colsToQuery <- c("ENTRY-NAME", "GENES",
+            "PROTEIN-NAMES", "ORGANISM", 
+            "ORGANISM-ID", "SEQUENCE", 
+            "FUNCTION",
+            "SUBCELLULAR-LOCATIONS", 
+            "GO-ID")
 
-for (i in seq_along(accession_chunks)) {
-  
-  pb$tick()
-  
-  suppressMessages(saferesults <- 
-                     safeselect(UPtaxon,
-                                keys = accession_chunks[[i]],
-                                columns = c("ENTRY-NAME", "GENES",
-                                            "PROTEIN-NAMES", "ORGANISM", 
-                                            "ORGANISM-ID", "SEQUENCE", 
-                                            "FUNCTION",
-                                            "SUBCELLULAR-LOCATIONS", 
-                                            "GO-ID"),
-                                keytype = "UNIPROTKB"))
-  
-  if (is.null(saferesults[["result"]]) == TRUE) {
-    
-    glue("FAILURE! Could not access UniProt webservice for chunk {i}!") %>% 
-      message
-    
-  } else {
-    
-    results <- union_all(results, saferesults[["result"]])
-    
-  }
-  
-}
+glue("Getting info from UniProt for taxon {taxon_number}..") %>%
+  message
+
+results_safe <- 
+  future_map(accession_chunks, ~safeselect(UPtaxon,
+                                           keys = .x,
+                                           columns = colsToQuery,
+                                           keytype = "UNIPROTKB"),
+             .progress = TRUE
+  )
+
+results_safe %>% walk(~(if (is.null(.x[["result"]]) == TRUE) message("NULL RESULT FOUND")) )
+
+results <-
+results_safe %>%
+  map(~(.x[["result"]])) %>%
+  reduce(union_all) %>%
+  as_tibble
+
+# Output and Cleanup ------------------------------------------------------
 
 UPdatabase <- results
 
@@ -75,4 +73,5 @@ saveRDS(results,
         file = glue("input/{taxon_number}_full_UniProt_database.rds"))
 
 rm(results)
-        
+
+plan(multisession(workers = oldworkernum %>% as.integer))
