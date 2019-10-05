@@ -356,14 +356,17 @@ getuniprotinfo2 <- function(tbl, filelistnum, tdreport = TRUE) {
                         "MonoisotopicMass", "AverageMass")
     
   } else {
+    
     results <- tibble(UNIPROTKB = pull(tbl, accession_name))
+    
   }
 
-  results %<>% left_join(dplyr::select(results_protein[[filelistnum]],
-                                       -c(Qvalue, 
-                                          filename,
-                                          monoiso_mass,
-                                          ave_mass)), by = "UNIPROTKB")
+  results <- results %>% 
+    left_join(dplyr::select(results_protein[[filelistnum]],
+                            -c(Qvalue, 
+                               filename,
+                               monoiso_mass,
+                               ave_mass)), by = "UNIPROTKB")
   
   
   return(results)
@@ -518,7 +521,7 @@ setwd(here())
 
 # Access UniProt ------------------------------------------------------------------------------
 
-print("Getting UniProt info from protein results...")
+message("Getting UniProt info from protein results...")
 
 # keytypes <- UniProt.ws::keytypes(UPtaxon) %>% enframe
 # columns <- UniProt.ws::columns(UPtaxon) %>% enframe
@@ -532,11 +535,13 @@ results_proteoform <- proteoformlist %>%
 
 if (tdreport_file == FALSE) {
   
-  print("Adding masses according to UniProt sequences...")
+  message("Adding masses according to UniProt sequences...")
   results_proteoform %<>% future_map(addmasses)
   
 } else {
-  print("Skipping addition of average and monoisotopic masses!")
+  
+  message("Skipping addition of average and monoisotopic masses!")
+  
 }
 
 results_proteoform[[length(results_proteoform)+1]] <- getlocations(results_proteoform)
