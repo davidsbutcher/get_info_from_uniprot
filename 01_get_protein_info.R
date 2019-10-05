@@ -401,7 +401,7 @@ read_tdreport_byfilename <- function(tdreport, fdr_cutoff = 0.01) {
 
 getuniprotinfo <- function(tbl, taxon = NULL, tdreport = TRUE) {
   
-  message("Retrieving info for from UniProt...")
+  message("Retrieving info from UniProt...")
   
   # Find column in the input tibble which has "accession"
   # in it and use it to get info from UniProt
@@ -485,6 +485,24 @@ getuniprotinfo <- function(tbl, taxon = NULL, tdreport = TRUE) {
   message("Finished retrieving info from UniProt!")
   
 }
+
+getuniprotinfo2 <- function(listofproteins, taxon = NULL, database = NULL) {
+  
+  message("Retrieving info from UniProt...")
+  
+  # Find column in the input tibble which has "accession"
+  # in it and use it to get info from UniProt
+  
+  accession_name <- grep("accession", names(listofproteins),
+                         ignore.case = TRUE, value = TRUE)
+  
+  listofproteins <- listofproteins %>% 
+    dplyr::select(-c(Id), "UNIPROTKB" := !!accession_name)
+  
+  left_join(listofproteins, database)
+  
+}
+
 
 addmasses <- function(tbl) {
   
@@ -667,7 +685,7 @@ if (length(unique(extension)) > 1) {
   proteinlistfull <- filelist %>% 
     future_map(read_tdreport_full, fdr_cutoff = fdr)
   
-  message("Reading full protein data from tdReport...")
+  message("Reading protein data by file name from tdReport...")
   proteinlistbyfilename <- filelist %>% 
     future_map(read_tdreport_byfilename, fdr_cutoff = fdr)
 
@@ -687,14 +705,38 @@ setwd(here())
 # keytypes <- UniProt.ws::keytypes(UPtaxon) %>% enframe
 # columns <- UniProt.ws::columns(UPtaxon) %>% enframe
 
-results_protein <- proteinlist %>% 
-  future_map(getuniprotinfo, taxon = UPtaxon,
-             tdreport = tdreport_file,
-             .progress = TRUE) %>%
-  map(as_tibble) %>% 
+# results_protein <- proteinlist %>% 
+#   future_map(getuniprotinfo, taxon = UPtaxon,
+#              tdreport = tdreport_file,
+#              .progress = TRUE) %>%
+#   map(as_tibble) %>% 
+#   future_map2(filelist, getGOterms, .progress = TRUE) %>% 
+#   map(addmasses)
+
+if (glue("input/{taxon_number}_full_UniProt_database.rds") %>% 
+    file.exists == TRUE) {
+  
+  glue("Found UniProt database for taxon {taxon_number}, loading") %>% 
+    message
+  
+  UPdatabase <- readRDS(glue("input/{taxon_number}_full_UniProt_database.rds"))
+  
+} else {
+  
+  glue("DID NOT FIND UniProt database for taxon {taxon_number}, DOWNLOADING...") %>% 
+    message
+  
+   source("B_Download_Taxon.R")
+  
+}
+
+results_protein <- proteinlist %>%
+  future_map(getuniprotinfo2,
+             taxon = taxon_number,
+             database = UPdatabase) %>% 
   future_map2(filelist, getGOterms, .progress = TRUE) %>% 
   map(addmasses)
-
+  
 results_protein[[length(results_protein)+1]] <- getlocations(results_protein)
 
 # Output --------------------------------------------------------------------------------------
