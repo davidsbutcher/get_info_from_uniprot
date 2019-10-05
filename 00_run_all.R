@@ -42,7 +42,7 @@ setwd(here())
 # You can also add the full path to a single file (including extension).
 
 filedir <- 
-  c("Z:/ICR/David Butcher/TDReports/peppi_f03_1dtt_2iaa.csv")
+  c("Z:/ICR/David Butcher/TDReports/201906_EcoliMG1655_GELFrEE/20190612_GELFrEE_F01-08_1run.tdReport")
 
 # Specify false discovery rate to use for rejection of hits (as decimal)
 # when using a tdReport as input - 0.01 is 1% FDR
