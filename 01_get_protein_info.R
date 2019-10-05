@@ -774,6 +774,8 @@ for (i in seq_along(names(results_protein))) {
 
 }
 
+if (dir.exists("output") == FALSE) dir.create("output")
+
 setwd(here("output"))
 
 
@@ -788,6 +790,8 @@ if (tdreport_file == TRUE) {
   
   names(proteinlistfull) <- unlist(filelist) %>% basename
   
+  if (dir.exists("allproteinhits") == FALSE) dir.create("allproteinhits")
+  
   PLFnameslist <- 
     filelist %>%
     map(basename) %>%
@@ -798,6 +802,8 @@ if (tdreport_file == TRUE) {
   map2(proteinlistfull, PLFnameslist, ~write_xlsx(.x, path = .y))
   
   # Save list of proteins by filename ---------------------------------------
+  
+  if (dir.exists("proteinsbydatafile") == FALSE) dir.create("proteinsbydatafile")
   
   PLBFlist <- 
     map2(proteinlistbyfilename, filelist, savePLBF)
@@ -814,6 +820,8 @@ if (tdreport_file == TRUE) {
 }
 
 # Save RDS ----------------------------------------------------------------
+
+if (dir.exists("rds") == FALSE) dir.create("rds")
 
 results_protein %>%
   saveRDS(file = glue("rds/{resultsobjectname}"))

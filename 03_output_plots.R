@@ -1,5 +1,9 @@
 # Run 01_get_protein_info and 02_get_proteoform info first!
 
+if (dir.exists("output/png") == FALSE) dir.create("output/png")
+
+if (dir.exists("output/pdf") == FALSE) dir.create("output/pdf")
+
 # Make ggplots --------------------------------------------------------------------------------
 
 for (i in head(seq_along(results_protein), - 1)) {
@@ -73,7 +77,9 @@ for (i in head(seq_along(results_protein), - 1)) {
 
 # Save Workspace ------------------------------------------------------------------------------
 
-# Just in case I want to see an image from a particular run of results
+# Just in case you want to see an image from a particular run of results
+
+if (dir.exists("output/workspace_images") == FALSE) dir.create("output/workspace_images")
 
 glue("output/workspace_images/{systime}_workspace_image.RData") %>% 
   save.image()
