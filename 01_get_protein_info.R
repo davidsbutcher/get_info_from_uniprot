@@ -4,30 +4,6 @@
 
 # Functions -----------------------------------------------------------------------------------
 
-kickout <- function(list) {
-  
-  # This function removes any element from the list of input files
-  # (from root/input) which does not have one of the allowed
-  # extensions or which has "deprecated"
-  
-  allowed_ext <- c("tdReport", "csv", "xlsx")
-  
-  for (i in rev(seq_along(list))) {
-    
-    if (!(tools::file_ext(list[[i]]) %in% allowed_ext)) {
-      
-      list[[i]] <- NULL 
-      
-    } else if (str_detect(list[[i]], fixed("deprecated", TRUE)) == TRUE) {
-      
-      list[[i]] <- NULL 
-      
-    }
-  }
-  
-  return(list)
-}
-
 read_tdreport <- function(tdreport, fdr_cutoff = 0.01) {
   
   message(glue("\nEstablishing connection to {basename(tdreport)}..."))
@@ -215,21 +191,21 @@ read_tdreport_full <- function(tdreport, fdr_cutoff = 0.01) {
       RSQLite::dbGetQuery("SELECT Id, Name 
                         FROM DataFile") %>%
       as_tibble %>% 
-      rename("DataFileId" = Id) %>% 
-      rename("filename" = Name)
+      dplyr::rename("DataFileId" = Id) %>% 
+      dplyr::rename("filename" = Name)
     
     resultset <- con %>%
       RSQLite::dbGetQuery("SELECT Id, Name 
                         FROM ResultSet") %>%
       as_tibble %>% 
-      rename("ResultSetId" = Id) %>% 
-      rename("ResultSetName" = Name)
+      dplyr::rename("ResultSetId" = Id) %>% 
+      dplyr::rename("ResultSetName" = Name)
     
     isoform <- con %>%
       RSQLite::dbGetQuery("SELECT Id, AccessionNumber 
                         FROM Isoform") %>%
       as_tibble %>% 
-      rename("IsoformId" = Id)
+      dplyr::rename("IsoformId" = Id)
     
     bioproteoform <- con %>%
       RSQLite::dbGetQuery("SELECT IsoformId, ChemicalProteoformId
@@ -240,14 +216,14 @@ read_tdreport_full <- function(tdreport, fdr_cutoff = 0.01) {
       RSQLite::dbGetQuery("SELECT Id, ResultSetId, DataFileId, ChemicalProteoformId
                         FROM Hit") %>%
       as_tibble %>% 
-      rename("HitId" = Id)
+      dplyr::rename("HitId" = Id)
     
     
     entry <- con %>%
       RSQLite::dbGetQuery("SELECT Id, AccessionNumber
                         FROM Entry") %>%
       as_tibble %>% 
-      rename("EntryId" = Id)
+      dplyr::rename("EntryId" = Id)
     
     # Get Qvals and other info from "GlobalQualitativeConfidence"
     # table, put it into a new tibble. Remove all values for Q
@@ -259,7 +235,7 @@ read_tdreport_full <- function(tdreport, fdr_cutoff = 0.01) {
       as_tibble %>%
       filter(.$ExternalId != 0) %>%
       filter(.$GlobalQvalue <= fdr_cutoff) %>%
-      rename("EntryId" = ExternalId)
+      dplyr::rename("EntryId" = ExternalId)
     
   }
 
@@ -269,7 +245,7 @@ read_tdreport_full <- function(tdreport, fdr_cutoff = 0.01) {
                 filter(HitId %in% q_vals$HitId),
               by = "ChemicalProteoformId") %>%
     left_join(q_vals) %>% 
-    select(-c(ChemicalProteoformId, Id, EntryId, HitId)) %>% 
+    dplyr::select(-c(ChemicalProteoformId, Id, EntryId, HitId)) %>% 
     left_join(datafile) %>% 
     left_join(resultset) %>%
     drop_na
@@ -282,7 +258,7 @@ read_tdreport_full <- function(tdreport, fdr_cutoff = 0.01) {
   
   dbDisconnect(con)
   
-  message("read_tdreport_byfilename Finished!")
+  message("read_tdreport_full Finished!")
   
   return(output)
   
@@ -327,14 +303,14 @@ read_tdreport_byfilename <- function(tdreport, fdr_cutoff = 0.01) {
       RSQLite::dbGetQuery("SELECT Id, Name 
                         FROM DataFile") %>%
       as_tibble %>% 
-      rename("DataFileId" = Id) %>% 
-      rename("filename" = Name)
+      dplyr::rename("DataFileId" = Id) %>% 
+      dplyr::rename("filename" = Name)
     
     isoform <- con %>%
       RSQLite::dbGetQuery("SELECT Id, AccessionNumber 
                         FROM Isoform") %>%
       as_tibble %>% 
-      rename("IsoformId" = Id)
+      dplyr::rename("IsoformId" = Id)
     
     bioproteoform <- con %>%
       RSQLite::dbGetQuery("SELECT IsoformId, ChemicalProteoformId
@@ -345,14 +321,14 @@ read_tdreport_byfilename <- function(tdreport, fdr_cutoff = 0.01) {
       RSQLite::dbGetQuery("SELECT Id, DataFileId, ChemicalProteoformId
                         FROM Hit") %>%
       as_tibble %>% 
-      rename("HitId" = Id)
+      dplyr::rename("HitId" = Id)
     
     
     entry <- con %>%
       RSQLite::dbGetQuery("SELECT Id, AccessionNumber
                         FROM Entry") %>%
       as_tibble %>% 
-      rename("EntryId" = Id)
+      dplyr::rename("EntryId" = Id)
     
     # Get Qvals and other info from "GlobalQualitativeConfidence"
     # table, put it into a new tibble. Remove all values for Q
@@ -364,7 +340,7 @@ read_tdreport_byfilename <- function(tdreport, fdr_cutoff = 0.01) {
       as_tibble %>%
       filter(.$ExternalId != 0) %>%
       filter(.$GlobalQvalue <= fdr_cutoff) %>%
-      rename("EntryId" = ExternalId)
+      dplyr::rename("EntryId" = ExternalId)
     
   }
   
@@ -374,13 +350,13 @@ read_tdreport_byfilename <- function(tdreport, fdr_cutoff = 0.01) {
                 filter(HitId %in% q_vals$HitId),
               by = "ChemicalProteoformId") %>%
     left_join(q_vals) %>% 
-    select(-c(ChemicalProteoformId, Id, EntryId, HitId)) %>% 
+    dplyr::select(-c(ChemicalProteoformId, Id, EntryId, HitId)) %>% 
     left_join(datafile) %>% 
     drop_na
   
   proteinhitsbyfilename <- 
     allproteinhits %>% 
-    select(-c("DataFileId", "IsoformId", "GlobalQvalue")) %>% 
+    dplyr::select(-c("DataFileId", "IsoformId", "GlobalQvalue")) %>% 
     pivot_wider(names_from = "filename",
                 values_from = "AccessionNumber",
                 values_fn = list(AccessionNumber = list))
@@ -393,7 +369,7 @@ read_tdreport_byfilename <- function(tdreport, fdr_cutoff = 0.01) {
   
   dbDisconnect(con)
   
-  message("read_tdreport_full Finished!")
+  message("read_tdreport_byfilename Finished!")
   
   return(output)
   
@@ -578,9 +554,11 @@ getlocations <- function(resultslist) {
     membraneAccession <- resultslist[[i]]$UNIPROTKB[str_detect(resultslist[[i]]$GO_subcell_loc,
                                                                c("membrane"))]
     
-    glue("{sum(cytosolAccession %in% bothAccession)} cytosolic proteins in 'both' for iteration {i}") %>% message
+    glue("{sum(cytosolAccession %in% bothAccession)} cytosolic proteins in 'both' for iteration {i}") %>%
+      message
     
-    glue("{sum(membraneAccession %in% bothAccession)} membrane proteins in 'both' for iteration {i}") %>% message
+    glue("{sum(membraneAccession %in% bothAccession)} membrane proteins in 'both' for iteration {i}") %>%
+      message
 
     # For cytosol_count and membrane_count, ONLY count the accessions which are NOT 
     # found in the list of accessions including both "cytosol|cytoplasm" and "membrane".
@@ -638,27 +616,27 @@ savePLBF <- function(input_tbbl, filename) {
 
 # Read Data Files -----------------------------------------------------------------------------
 
-# Data files must
-# be in csv, xlsx, or tdReport format and have a column of UniProt IDs whose 
-# name includes the word "accession" somewhere. Case doesn't matter
-# but spelling does.
-
-if (file.exists(filedir) == TRUE) {
-  
-  filelist <- filedir %>% as.list() %>% kickout
-  filedir <- filedir %>% dirname()
-  
-  names(filelist) <- seq(1, length(filelist))
-  
-} else {
-  
-  filelist <- filedir %>%
-    list.files(recursive = T, include.dirs = T, full.names = T) %>%
-    as.list %>% kickout
-  
-  names(filelist) <- seq(1, length(filelist))
-  
-}
+# # Data files must
+# # be in csv, xlsx, or tdReport format and have a column of UniProt IDs whose 
+# # name includes the word "accession" somewhere. Case doesn't matter
+# # but spelling does.
+# 
+# if (file.exists(filedir) == TRUE) {
+#   
+#   filelist <- filedir %>% as.list() %>% kickout
+#   filedir <- filedir %>% dirname()
+#   
+#   names(filelist) <- seq(1, length(filelist))
+#   
+# } else {
+#   
+#   filelist <- filedir %>%
+#     list.files(recursive = T, include.dirs = T, full.names = T) %>%
+#     as.list %>% kickout
+#   
+#   names(filelist) <- seq(1, length(filelist))
+#   
+# }
 
 setwd(filedir)
 

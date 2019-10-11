@@ -1,0 +1,146 @@
+---
+title: "GUPPI Output Report"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+
+output: 
+  bookdown::html_document2:
+    theme: spacelab
+    css: [extras/DSB_guppi_report.css]
+    number_sections: FALSE
+    self_contained: TRUE
+    toc: TRUE
+---
+
+```{r setup, include=FALSE}
+
+library(magrittr)
+library(purrr)
+library(glue)
+library(dplyr)
+library(DT)
+library(htmlwidgets)
+
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r, cache.lazy = TRUE}
+
+# Load workspace image
+
+# load("output/workspace_images/20191005_001602_workspace_image.RData")
+
+```
+
+
+This is an automatically generated document containing GUPPI analysis results for the following files:
+
+```{r}
+
+filelist %>% pander::pander()
+
+```
+
+Note that these tables feature truncated data sets! More information is available in the full output files.
+
+## Protein Results
+
+### Best Protein Hits {.tabset .tabset-fade}
+
+```{r, echo = FALSE, height = "500px"}
+
+out <-  NULL
+for (i in seq_along(filelist)) {
+  out = c(out, knitr::knit_expand("output/report/template/chunk_template_01.Rmd"))
+}
+
+```
+
+`r paste(knitr::knit(text = out), collapse = '\n\n')`
+
+### All Protein Hits {.tabset .tabset-fade}
+
+```{r, echo = FALSE, height = "500px"}
+
+out <-  NULL
+for (i in seq_along(filelist)) {
+  out = c(out, knitr::knit_expand("output/report/template/chunk_template_02.Rmd"))
+}
+
+```
+
+`r paste(knitr::knit(text = out), collapse = '\n\n')`
+
+### Common Proteins
+
+The following proteins were found in all of the TD reports analyzed. They are sorted by UniProt accession number.
+
+<details>
+  <summary>Click to show</summary>
+
+```{r, results = "asis"}
+
+accessionlist <- results_protein %>%
+  .[1:(length(.) - 1)] %>% 
+  map(~.$UNIPROTKB)
+
+Reduce(intersect, accessionlist) %>%
+  pander::pandoc.list()
+
+```
+
+</details>
+
+### Mass Histograms
+
+
+
+## Proteoform Results
+
+### Best Proteoform Hits {.tabset .tabset-fade}
+
+```{r, echo = FALSE, height = "500px"}
+
+out <-  NULL
+for (i in seq_along(filelist)) {
+  out = c(out, knitr::knit_expand("output/report/template/chunk_template_01b.Rmd"))
+}
+
+```
+
+`r paste(knitr::knit(text = out), collapse = '\n\n')`
+
+### Common Proteoforms
+
+The following proteoforms were found in all of the TD reports analyzed. They are sorted by proteoform record number.
+
+<details>
+  <summary>Click to show</summary>
+
+```{r, results = "asis"}
+
+PFRlist <- results_proteoform %>%
+  .[1:(length(.) - 1)] %>% 
+  map(~.$ProteoformRecordNum)
+
+Reduce(intersect, PFRlist) %>%
+  pander::pandoc.list()
+
+```
+
+</details>
+
+### Mass Histograms
+
+## Session Info
+
+This is the session info for the R session which generated the results above.
+
+```{r, results = "markup"}
+
+sesh <- fs::dir_info("output/session_info") %>% 
+  dplyr::filter(modification_time == max(.$modification_time)) %>% 
+  .$path
+
+readr::read_lines(sesh)
+
+```

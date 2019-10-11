@@ -1,0 +1,81 @@
+/* @import url(https://fonts.googleapis.com/css?family=Inconsolata);
+@import url('https://fonts.googleapis.com/css?family=Roboto+Condensed:400,400i,700);
+@import url('https://fonts.googleapis.com/css?family=Roboto:700'); */
+
+body {
+  font-family: 'Roboto Condensed', 'Avenir Next', 'Helvetica Neue', 'Helvetica', sans-serif;
+  font-weight: 400;
+  font-size: 18px;
+  background-color: white;
+  color: black;
+}
+
+body .main-container {
+  max-width: 1400px !important;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.caption {
+  font-size: 0.9em;
+  margin-top: 0.1em;
+  padding: 0 0 0 0;
+}
+
+.tocify {
+  color: black;
+}
+
+.list-group-item.active, .list-group-item.active:focus, .list-group-item.active:hover {
+  background-color: #E31837;
+}
+
+h1, h2, h3, h4 {
+  margin-top: 40px;
+  margin-bottom: 40px;
+  font-weight: 700;
+}
+
+h1 {
+  font-size: 1.6em;
+   color: black;
+   margin: 20px;
+   text-align: center;
+}
+
+h2 {
+   font-size: 1.5em;
+   color: black;
+   border-bottom: 2px solid black;
+   margin-bottom: 12px;
+}
+
+h3 {
+   text-decoration: underline;
+  font-size: 1.2em;
+   color: black;
+}
+
+h4 {
+   font-style: italic;
+   font-size: 1.1em;
+   color: black;
+}
+
+.smaller {
+  font-size: 0.8em;
+}
+
+.smallest {
+  font-size: 0.4em;
+}
+
+.larger {
+  font-size: 1.2em;
+}
+
+.whitebg {
+  
+  background: white;
+  
+}

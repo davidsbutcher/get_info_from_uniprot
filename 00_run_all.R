@@ -42,7 +42,7 @@ setwd(here())
 # You can also add the full path to a single file (including extension).
 
 filedir <- 
-  c("Z:/ICR/David Butcher/TDReports/201906_EcoliMG1655_GELFrEE/20190612_GELFrEE_F01-08_1run.tdReport")
+  c("Z:/ICR/David Butcher/TDReports/201906_EcoliMG1655_GELFrEE/")
 
 # Specify false discovery rate to use for rejection of hits (as decimal)
 # when using a tdReport as input - 0.01 is 1% FDR
@@ -62,17 +62,77 @@ taxon_number <- 83333
 
 go_locs_file <- "QuickGO_annotations_20190708.tsv"
 
+# Should PushBullet be used to notify when the script is finished?
+
+use_PB <- TRUE
+
+# Should a summary be generated for this analysis?
+
+make_report <- FALSE
+
+# Functions ---------------------------------------------------------------
+
+kickout <- function(list) {
+  
+  # This function removes any element from the list of input files
+  # (from root/input) which does not have one of the allowed
+  # extensions or which has "deprecated"
+  
+  allowed_ext <- c("tdReport", "csv", "xlsx")
+  
+  for (i in rev(seq_along(list))) {
+    
+    if (!(tools::file_ext(list[[i]]) %in% allowed_ext)) {
+      
+      list[[i]] <- NULL 
+      
+    } else if (str_detect(list[[i]], fixed("deprecated", TRUE)) == TRUE) {
+      
+      list[[i]] <- NULL 
+      
+    }
+  }
+  
+  return(list)
+}
+
+# Load data ---------------------------------------------------------------
+
+# Data files must
+# be in csv, xlsx, or tdReport format and have a column of UniProt IDs whose 
+# name includes the word "accession" somewhere. Case doesn't matter
+# but spelling does.
+
+if (file.exists(filedir) == TRUE) {
+  
+  filelist <- filedir %>% as.list() %>% kickout
+  filedir <- filedir %>% dirname()
+  
+  names(filelist) <- seq(1, length(filelist))
+  
+} else {
+  
+  filelist <- filedir %>%
+    list.files(recursive = T, include.dirs = T, full.names = T) %>%
+    as.list %>% kickout
+  
+  names(filelist) <- seq(1, length(filelist))
+  
+}
+
 # Need to run this command for furrr. If 10 is too many sessions for your
 # system try 5. If running <10 files, change workers to be equal to number
 # of files. workers = 1 is equivalent to not using furrr at all
 
-plan(multisession(workers = 1))
-
-# Should PushBullet be used to notify when the script is finished?
-
-use_PB <- FALSE
-
-# Load data ---------------------------------------------------------------
+if (length(filelist) >= 8) {
+  
+  plan(multisession(workers = 8))
+  
+} else {
+  
+  plan(multisession(workers = length(filelist)))
+       
+}
 
 # Check for a file in the input folder which contains the UniProt.ws
 # taxon data. If it exists, load it. Otherwise, download it SAFELY
@@ -133,6 +193,8 @@ source("01_get_protein_info.R")
 source("02_get_proteoform_info.R")
 source("03_output_plots.R")
 
+if (make_report == TRUE) source("04_generate_report.R")
+
 totaltime <- capture.output(toc()) %>%
   str_extract("[0-9]+") %>%
   as.numeric %>%
@@ -153,9 +215,11 @@ pbPost("note", "R Analysis Finished",
 # Session info for every run is saved to a txt file in the 
 # output directory, in case 
 
-sessionInfo() %>%
+if(dir.exists("output/session_info") == FALSE) dir.create("output/session_info")
+
+sessioninfo::session_info() %>%
   capture.output %>%
-  writeLines(glue("output/{systime}_sessionInfo.txt"))
+  writeLines(glue("output/session_info/{systime}_sessionInfo.txt"))
 
 # Close the extra R sessions used by future/furrr
 
