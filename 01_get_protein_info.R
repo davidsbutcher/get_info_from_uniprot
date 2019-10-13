@@ -144,8 +144,7 @@ read_tdreport <- function(tdreport, fdr_cutoff = 0.01) {
   dbDisconnect(con)
   
   message("read_tdreport Finished!")
-  Sys.sleep(0.2)
-  
+
   return(output)
   
 }
@@ -202,10 +201,12 @@ read_tdreport_full <- function(tdreport, fdr_cutoff = 0.01) {
       dplyr::rename("ResultSetName" = Name)
     
     isoform <- con %>%
-      RSQLite::dbGetQuery("SELECT Id, AccessionNumber 
+      RSQLite::dbGetQuery("SELECT Id, AccessionNumber, Sequence 
                         FROM Isoform") %>%
       as_tibble %>% 
-      dplyr::rename("IsoformId" = Id)
+      dplyr::rename("IsoformId" = Id) %>% 
+      dplyr::rename("SEQUENCE" = Sequence)
+    
     
     bioproteoform <- con %>%
       RSQLite::dbGetQuery("SELECT IsoformId, ChemicalProteoformId
@@ -402,7 +403,7 @@ getuniprotinfo <- function(tbl, taxon = NULL, tdreport = TRUE) {
   # Prepare progress bar
   
   pb <- progress_bar$new(
-    format = "  Accessing UniProt [:bar] :percent eta: :eta :spin",
+    format = "Accessing UniProt [:bar] :percent eta: :eta :spin",
     total = length(pull(tbl, accession_name)),
     clear = FALSE, width= 60)
   
@@ -499,10 +500,25 @@ addmasses <- function(tbl) {
   
 }
 
-getGOterms <- function(tbl, file_list) {
+addfraction <- function(tbl) {
   
-  library(magrittr)
-  library(GO.db)
+# This function attempts to parse the filenames to extract information
+# about the fraction that a raw file corresponds to. This is only useful
+# for GELFrEE/PEPPI/other fractionated data
+  
+  tbl %>% 
+    mutate(
+      fraction = case_when(
+        stringr::str_detect(filename, "(?i)(?<=gf|peppi|frac|fraction|f)[0-9]{1,2}") == TRUE ~
+          stringr::str_extract(filename,
+                               "(?i)(?<=gf|peppi|frac|fraction|f)[0-9]{1,2}"),
+        stringr::str_detect(filename, "(?i)(?<=gf|peppi|frac|fraction|f)[0-9]{1,2}") == FALSE ~ "NA"
+      )
+    )
+  
+}
+
+getGOterms <- function(tbl, file_list) {
 
   message(glue("Getting GO subcellular locations for {basename(file_list)}..."))
   
@@ -616,28 +632,6 @@ savePLBF <- function(input_tbbl, filename) {
 
 # Read Data Files -----------------------------------------------------------------------------
 
-# # Data files must
-# # be in csv, xlsx, or tdReport format and have a column of UniProt IDs whose 
-# # name includes the word "accession" somewhere. Case doesn't matter
-# # but spelling does.
-# 
-# if (file.exists(filedir) == TRUE) {
-#   
-#   filelist <- filedir %>% as.list() %>% kickout
-#   filedir <- filedir %>% dirname()
-#   
-#   names(filelist) <- seq(1, length(filelist))
-#   
-# } else {
-#   
-#   filelist <- filedir %>%
-#     list.files(recursive = T, include.dirs = T, full.names = T) %>%
-#     as.list %>% kickout
-#   
-#   names(filelist) <- seq(1, length(filelist))
-#   
-# }
-
 setwd(filedir)
 
 extension <- filelist %>% map(tools::file_ext)
@@ -688,17 +682,6 @@ setwd(here())
 
 # Access UniProt ------------------------------------------------------------------------------
 
-# keytypes <- UniProt.ws::keytypes(UPtaxon) %>% enframe
-# columns <- UniProt.ws::columns(UPtaxon) %>% enframe
-
-# results_protein <- proteinlist %>% 
-#   future_map(getuniprotinfo, taxon = UPtaxon,
-#              tdreport = tdreport_file,
-#              .progress = TRUE) %>%
-#   map(as_tibble) %>% 
-#   future_map2(filelist, getGOterms, .progress = TRUE) %>% 
-#   map(addmasses)
-
 if (glue("input/{taxon_number}_full_UniProt_database.rds") %>% 
     file.exists == TRUE) {
   
@@ -722,7 +705,13 @@ results_protein <- proteinlist %>%
              database = UPdatabase,
              tdrep = tdreport_file) %>% 
   future_map2(filelist, getGOterms, .progress = TRUE) %>% 
-  map(addmasses)
+  future_map(addmasses) %>% 
+  future_map(addfraction)
+
+proteinlistfull <- 
+  proteinlistfull %>%
+  future_map(addmasses) %>%
+  future_map(addfraction)
   
 results_protein[[length(results_protein)+1]] <- getlocations(results_protein)
 
