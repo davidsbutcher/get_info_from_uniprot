@@ -29,7 +29,12 @@ library(RPushbullet)
 library(ggpubr)
 library(UniProt.ws)
 library(magrittr)
-library(tidyverse)
+library(tibble)
+library(dplyr)
+library(purrr)
+library(stringr)
+library(readr)
+library(tidyr)
 
 # Initialize Parameters -----------------------------------------------------------------------
 
