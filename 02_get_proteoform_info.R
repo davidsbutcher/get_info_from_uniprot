@@ -366,7 +366,8 @@ getuniprotinfo2 <- function(tbl, filelistnum, tdreport = TRUE) {
                             -c(Qvalue, 
                                filename,
                                monoiso_mass,
-                               ave_mass)), by = "UNIPROTKB")
+                               ave_mass,
+                               fraction)), by = "UNIPROTKB")
   
   
   return(results)
