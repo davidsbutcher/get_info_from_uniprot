@@ -19,6 +19,7 @@ library(glue)
 library(dplyr)
 library(DT)
 library(htmlwidgets)
+library(ggplot2)
 
 knitr::opts_chunk$set(echo = FALSE)
 ```
@@ -44,13 +45,54 @@ Note that these tables feature truncated data sets! More information is availabl
 
 ## Protein Results
 
-### Best Protein Hits {.tabset .tabset-fade}
+### Best Protein Hits - Tables {.tabset .tabset-fade}
 
-```{r, echo = FALSE, height = "500px"}
+This data corresponds to the lowest Q-value hits for each protein in each TD report.
+
+```{r best-protein-hits, echo = FALSE, height = "500px"}
 
 out <-  NULL
 for (i in seq_along(filelist)) {
-  out = c(out, knitr::knit_expand("output/report/template/chunk_template_01.Rmd"))
+  out = c(out, knitr::knit_expand("output/report/template/best-protein-hits-tables.Rmd"))
+}
+
+```
+
+`r paste(knitr::knit(text = out), collapse = '\n\n')`
+
+### Best Protein Hits - Counts by Filename {.tabset .tabset-fade}
+
+```{r, echo = FALSE}
+
+out <-  NULL
+for (i in seq_along(filelist)) {
+  out = c(out, knitr::knit_expand("output/report/template/protein-mass-histograms-01a.Rmd"))
+}
+
+```
+
+`r paste(knitr::knit(text = out), collapse = '\n\n')`
+
+### Best Protein Hits - Counts by Fraction {.tabset .tabset-fade}
+
+```{r, echo = FALSE}
+
+out <-  NULL
+for (i in seq_along(filelist)) {
+  out = c(out, knitr::knit_expand("output/report/template/protein-mass-histograms-01b.Rmd"))
+}
+
+```
+
+`r paste(knitr::knit(text = out), collapse = '\n\n')`
+
+### Best Protein Hits - Mass Distributions by Filename {.tabset .tabset-fade}
+
+```{r, echo = FALSE}
+
+out <-  NULL
+for (i in seq_along(filelist)) {
+  out = c(out, knitr::knit_expand("output/report/template/protein-mass-histograms-02.Rmd"))
 }
 
 ```
@@ -59,11 +101,11 @@ for (i in seq_along(filelist)) {
 
 ### All Protein Hits {.tabset .tabset-fade}
 
-```{r, echo = FALSE, height = "500px"}
+```{r all-protein-hits, echo = FALSE, height = "500px"}
 
 out <-  NULL
 for (i in seq_along(filelist)) {
-  out = c(out, knitr::knit_expand("output/report/template/chunk_template_02.Rmd"))
+  out = c(out, knitr::knit_expand("output/report/template/all-protein-hits.Rmd"))
 }
 
 ```
@@ -90,19 +132,15 @@ Reduce(intersect, accessionlist) %>%
 
 </details>
 
-### Mass Histograms
-
-
-
 ## Proteoform Results
 
 ### Best Proteoform Hits {.tabset .tabset-fade}
 
-```{r, echo = FALSE, height = "500px"}
+```{r best-proteoform-hits, echo = FALSE, height = "500px"}
 
 out <-  NULL
 for (i in seq_along(filelist)) {
-  out = c(out, knitr::knit_expand("output/report/template/chunk_template_01b.Rmd"))
+  out = c(out, knitr::knit_expand("output/report/template/best-proteoform-hits.Rmd"))
 }
 
 ```
