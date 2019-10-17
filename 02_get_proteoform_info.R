@@ -434,14 +434,24 @@ getlocations <- function(resultslist) {
     
     allAccession <- resultslist[[i]]$UNIPROTKB
     
-    bothAccession <-  resultslist[[i]]$UNIPROTKB[str_detect(resultslist[[i]]$GO_subcell_loc,
-                                                            c("cytosol|cytoplasm", "membrane"))]
+    bothAccession <-  resultslist[[i]]$UNIPROTKB[
+      str_detect(resultslist[[i]]$GO_subcell_loc, c("cytosol|cytoplasm")) &
+        str_detect(resultslist[[i]]$GO_subcell_loc, c("membrane"))
+      ]
     
     cytosolAccession <-  resultslist[[i]]$UNIPROTKB[str_detect(resultslist[[i]]$GO_subcell_loc,
                                                                c("cytosol|cytoplasm"))]
     
-    membraneAccession <- resultslist[[i]]$UNIPROTKB[str_detect(resultslist[[i]]$GO_subcell_loc,
-                                                               c("membrane"))]
+    # membraneAccession <- resultslist[[i]]$UNIPROTKB[str_detect(resultslist[[i]]$GO_subcell_loc,
+    #                                                            c("membrane"))]
+    
+    membraneAccession <- resultslist[[i]]$UNIPROTKB[
+      str_detect(resultslist[[i]]$GO_subcell_loc, c("membrane")) &
+        !str_detect(resultslist[[i]]$GO_subcell_loc, c("outer membrane-bounded periplasmic space"))
+      ]
+    
+    # periplasmAccession <- resultslist[[i]]$UNIPROTKB[str_detect(resultslist[[i]]$GO_subcell_loc,
+    #                                                            c("periplasm"))]
     
     glue("{sum(cytosolAccession %in% bothAccession)} cytosolic proteoforms in 'both' for iteration {i}") %>% message
     
@@ -459,9 +469,61 @@ getlocations <- function(resultslist) {
     
     counts$both_count[i] <- length(bothAccession)
     
-    counts$none_count[i] <- sum(!(allAccession %in% bothAccession) &
-                                  !(allAccession %in% cytosolAccession) &
+    counts$none_count[i] <- sum(!(allAccession %in% cytosolAccession) &
                                   !(allAccession %in% membraneAccession))
+    
+  }
+  
+  return(counts)
+}
+
+getlocations_proteoform <- function(resultslist) {
+  
+  # This function gets counts of membrane, cytosolic, and "both" proteoforms based on
+  # GO terms pulled from UniProt for each unique accession number.
+  
+  counts <- tibble(filename = basename(names(resultslist)),
+                   proteoform_count = NA,
+                   cytosol_count = NA,
+                   membrane_count = NA,
+                   periplasm_count = NA,
+                   NOTA_count = NA)
+  
+  for (i in seq_along(resultslist)) {
+    
+    tempresults <- tibble()
+    
+    # For every proteoform in each output, get the count of proteoforms whose GO terms
+    # include "cytosol" OR "cytoplasm", "membrane", or BOTH. 
+    # WE DO NOT DIFFERENTIATE BETWEEN MEMBRANE TYPES!
+    tempresults <- 
+      resultslist[[i]] %>% 
+      mutate(cytosol = str_detect(resultslist[[i]]$GO_subcell_loc,
+                                  c("cytosol|cytoplasm|ribosome"))) %>%
+      mutate(membrane = str_detect(resultslist[[i]]$GO_subcell_loc, 
+                                   c("membrane")) &
+               !str_detect(resultslist[[i]]$GO_subcell_loc, 
+                           c("membrane-bounded periplasmic space"))) %>% 
+      mutate(periplasm = str_detect(resultslist[[i]]$GO_subcell_loc,
+                                    c("periplasm")))
+    
+    # For cytosol_count and membrane_count, ONLY count the accessions which are NOT 
+    # found in the list of accessions including both "cytosol|cytoplasm" and "membrane".
+    # This prevents double-counting of proteoforms by localization
+    
+    counts$proteoform_count[i] <- tempresults %>% .$UNIPROTKB %>% length()
+    
+    counts$cytosol_count[i] <- sum(tempresults$cytosol)
+    
+    counts$membrane_count[i] <- sum(tempresults$membrane)
+    
+    counts$periplasm_count[i] <- sum(tempresults$periplasm)
+    
+    counts$NOTA_count[i] <- tally(tempresults %>% 
+                                    filter(cytosol == FALSE) %>% 
+                                    filter(membrane == FALSE) %>% 
+                                    filter(periplasm == FALSE)) %>%
+      .$n
     
   }
   
@@ -498,14 +560,16 @@ if (length(unique(extension)) > 1) {
 } else if (extension[[1]] == "tdReport") {
   
   message("Reading proteoform data from tdReport...")
-  proteoformlist <- filelist %>% future_map2(., proteinlist, read_tdreport,
-                                      fdr_cutoff = fdr,
-                                      file_dir = filedir)
+  proteoformlist <- future_map2(filelist, proteinlist, read_tdreport,
+                                fdr_cutoff = fdr,
+                                file_dir = filedir)
   tdreport_file <- TRUE
   
 } else {
+  
   print("What are you doing with your life?")
   stop()
+  
 }
 
 
@@ -537,7 +601,7 @@ results_proteoform <- proteoformlist %>%
 if (tdreport_file == FALSE) {
   
   message("Adding masses according to UniProt sequences...")
-  results_proteoform %<>% future_map(addmasses)
+  results_proteoform <- results_proteoform %>% future_map(addmasses)
   
 } else {
   
@@ -545,7 +609,7 @@ if (tdreport_file == FALSE) {
   
 }
 
-results_proteoform[[length(results_proteoform)+1]] <- getlocations(results_proteoform)
+results_proteoform[[length(results_proteoform)+1]] <- getlocations_proteoform(results_proteoform)
 
 
 # Output --------------------------------------------------------------------------------------
