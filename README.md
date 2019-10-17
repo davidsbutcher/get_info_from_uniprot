@@ -21,9 +21,9 @@ All input parameters are given in 00_run_all.R, in the "Initialize Parameters" s
 
 - `go_locs_file <- "QuickGO_annotations_20190708.tsv"` This file will be used to determine which GO terms correspond to subcellular locations. This should not need to be changed.
 
-- `plan(multisession(workers = 10))` This is a parameter needed by the furrr package. It designates the number of simultaenous R sessions used for data processing. Using 10 workers allows for 10 files to be processed simultaneously, but uses a lot of system resources. Drop this number on weaker systems or if <10 files are being processed.
-
 - `use_PB <- FALSE` Optional parameter. If set to true, `RPushbullet` will be used to send a Pushbullet notification to your device when the analysis is finished. See `?RPushbullet::pbSetup` for more info.
+
+- `make_report <- FALSE` Controls whether a summary HTML report is generated in the `output/report` folder. Though it will work, I wouldn't reccomend doing this with an analysis of >12 TD reports.
 
 ## Analysis
 
@@ -50,5 +50,7 @@ Output files are saved to the output directory. Files are timestamped with the t
   + Output xlsx files contain sheets corresponding to each input file specified in 00_run_all.R and a final summary sheet containing all input file names and counts of cytosolic/membrane proteins.
 * Lists of all protein hits including UniProt accession number, Q value, data file, result type (i.e. tight absolute mass, find unexpected modifications, or biomarker) are saved to `output/allproteinhits` and share names with input files.
 * Lists of all unique protein hits for each data file in a TDReport (intended for use in UpSet plots, pie charts, waffle plots, etc.) are saved to `output/proteinsbydatafile`.
+* Lists of proteins counted by subcellular location for every individual datafile in the analysis are saved to `output/countsbydatafile`.
 * Mass histograms for identified proteins and proteoforms are saved to `/png` and `/pdf` in the corresponding formats.
 * Workspace images (.Rdata file containing all R objects) from the end of the analysis are saved to `output/workspace_images`.
+* If `make_report` is set to TRUE, an HTML report is saved to `output/report`.
