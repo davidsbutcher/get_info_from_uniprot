@@ -149,6 +149,114 @@ read_tdreport <- function(tdreport, fdr_cutoff = 0.01) {
   
 }
 
+read_tdreport2 <- function(tdreport, fdr_cutoff = 0.01) {
+  
+  message(glue("\nEstablishing connection to {basename(tdreport)}..."))
+  
+  #Establish database connection. Keep trying until it works!
+  #
+  
+  safe_dbConnect <- safely(dbConnect)
+  
+  safecon <- safe_dbConnect(RSQLite::SQLite(), ":memory:", dbname = tdreport)
+  
+  if (is.null(safecon[["result"]]) == TRUE) message("Connection failed, trying again!")
+  
+  iteration_num <- 1
+  
+  while (is.null(safecon[["result"]]) == TRUE & iteration_num < 500) {
+    
+    iteration_num <- iteration_num + 1
+    
+    message(glue("\nTrying to establish database connection, attempt {iteration_num}"))
+    safecon <- safe_dbConnect(RSQLite::SQLite(), ":memory:",
+                              dbname = tdreport,
+                              synchronous = NULL)
+    
+  }
+  
+  if (is.null(safecon[["result"]]) == TRUE) {
+    
+    stop("read_tdreport2 could not connect to TDreport")
+    
+  } else {
+    
+    message("Connection succeeded")
+    con <- safecon[["result"]]
+    
+  }
+
+  # Download SQL tables with needed data
+  
+  {
+    globalqualconf <- con %>%
+      RSQLite::dbGetQuery("SELECT GlobalQvalue, ExternalId, HitId 
+                        FROM GlobalQualitativeConfidence") %>%
+      as_tibble %>% 
+      filter(ExternalId != 0) %>% 
+      dplyr::rename("IsoformId" = ExternalId)
+    
+    datafile <- con %>%
+      RSQLite::dbGetQuery("SELECT Id, Name 
+                        FROM DataFile") %>%
+      as_tibble %>% 
+      dplyr::rename("DataFileId" = Id) %>% 
+      dplyr::rename("filename" = Name)
+    
+    resultset <- con %>%
+      RSQLite::dbGetQuery("SELECT Id, Name 
+                        FROM ResultSet") %>%
+      as_tibble %>% 
+      dplyr::rename("ResultSetId" = Id) %>% 
+      dplyr::rename("ResultSetName" = Name)
+    
+    isoform <- con %>%
+      RSQLite::dbGetQuery("SELECT Id,
+                        AccessionNumber, Sequence 
+                        FROM Isoform") %>%
+      as_tibble %>% 
+      dplyr::rename("IsoformId" = Id) %>% 
+      dplyr::rename("SEQUENCE" = Sequence)
+    
+    
+    bioproteoform <- con %>%
+      RSQLite::dbGetQuery("SELECT IsoformId, ChemicalProteoformId
+                        FROM BiologicalProteoform") %>%
+      as_tibble
+    
+    hit <- con %>%
+      RSQLite::dbGetQuery("SELECT Id, ResultSetId, DataFileId, ChemicalProteoformId
+                        FROM Hit") %>%
+      as_tibble %>% 
+      dplyr::rename("HitId" = Id)
+    
+    
+    entry <- con %>%
+      RSQLite::dbGetQuery("SELECT Id, AccessionNumber
+                        FROM Entry") %>%
+      as_tibble %>% 
+      dplyr::rename("EntryId" = Id)
+    
+  }
+  
+  output <- 
+    left_join(isoform, globalqualconf) %>% 
+    filter(GlobalQvalue <= fdr_cutoff) %>% 
+    left_join(hit) %>%
+    left_join(resultset) %>% 
+    left_join(datafile) %>%
+    select("AccessionNumber", "GlobalQvalue", "filename")
+
+  # Close database connection and return output table
+  
+  dbDisconnect(con)
+  
+  message("read_tdreport2 Finished!")
+  
+  return(output)
+  
+}
+
 read_tdreport_full <- function(tdreport, fdr_cutoff = 0.01) {
   
   # This function will return ALL hits above Q value threshold, not only the one
