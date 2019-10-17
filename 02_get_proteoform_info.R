@@ -38,16 +38,25 @@ read_tdreport <- function(tdreport, proteinlist, fdr_cutoff = 0.01, file_dir = N
   
   iteration_num <- 1
   
-  while (is.null(safecon[["result"]]) == TRUE) {
+  while (is.null(safecon[["result"]]) == TRUE & iteration_num < 500) {
     
-    print(glue("\nTrying to establish database connection, attempt {iteration_num}"))
+    message(glue("\nTrying to establish database connection, attempt {iteration_num}"))
     safecon <- safe_dbConnect(RSQLite::SQLite(), ":memory:",
                               dbname = tdreport,
                               synchronous = NULL)
     
   }
   
-  con <- safecon[["result"]]
+  if (is.null(safecon[["result"]]) == TRUE) {
+    
+    stop("read_tdreport2 could not connect to TDreport")
+    
+  } else {
+    
+    message("Connection succeeded")
+    con <- safecon[["result"]]
+    
+  }
   
   # Initialize the tibble where we'll be dropping our most 
   # important data, add NA columns for later use
@@ -196,7 +205,8 @@ read_tdreport <- function(tdreport, proteinlist, fdr_cutoff = 0.01, file_dir = N
   # Filter isoform_id by FDR cutoff value (default 0.01 or 1%)
   # and place results in "output" tibble
   
-  biologicalproteoform %<>% 
+biologicalproteoform <- 
+  biologicalproteoform %>% 
     filter(Qvalue < fdr_cutoff)
   
   revseq <- rev(seq_along(biologicalproteoform$AccessionNumber))
@@ -217,7 +227,7 @@ read_tdreport <- function(tdreport, proteinlist, fdr_cutoff = 0.01, file_dir = N
       
     }
     
-    if (is.na(qvaltocheck) == FALSE & qvaltocheck > fdr_cutoff) {
+    if (is.na(qvaltocheck) == FALSE & qvaltocheck >= fdr_cutoff) {
       
       biologicalproteoform %<>% .[-revseq[i],]
       message(glue("Q value above FDR, erasing proteoform {i}..."))
@@ -229,12 +239,9 @@ read_tdreport <- function(tdreport, proteinlist, fdr_cutoff = 0.01, file_dir = N
       
     } else {
      
-      # print(glue("**NOT** erasing proteoform {i}!"))
-       
+
     }
-    
-    # print (biologicalproteoform)
-    # print(glue("End of iteration {i} of loop."))
+
 
   }
   
@@ -244,10 +251,119 @@ read_tdreport <- function(tdreport, proteinlist, fdr_cutoff = 0.01, file_dir = N
   
   dbDisconnect(con)
   
-  print("Finished checking corresponding protein entries for Q values above cutoff!")
-  print(biologicalproteoform)
-  
+  message("Finished checking corresponding protein entries for Q values above cutoff!")
+
   return(biologicalproteoform)
+}
+
+read_tdreport2 <- function(tdreport, proteinlistin, fdr_cutoff = 0.01) {
+  
+  #Establish database connection. Keep trying until it works!
+  
+  safe_dbConnect <- safely(dbConnect)
+  
+  safecon <- safe_dbConnect(RSQLite::SQLite(), ":memory:",
+                            dbname = tdreport,
+                            synchronous = NULL)
+  
+  iteration_num <- 1
+  
+  while (is.null(safecon[["result"]]) == TRUE & iteration_num < 500) {
+    
+    print(glue("\nTrying to establish database connection, attempt {iteration_num}"))
+    safecon <- safe_dbConnect(RSQLite::SQLite(), ":memory:",
+                              dbname = tdreport,
+                              synchronous = NULL)
+    
+  }
+  
+  if (is.null(safecon[["result"]]) == TRUE) {
+    
+    stop("read_tdreport2 could not connect to TDreport")
+    
+  } else {
+    
+    message("Connection succeeded")
+    con <- safecon[["result"]]
+    
+  }
+  
+  {
+    globalqualconf <- con %>%
+      RSQLite::dbGetQuery("SELECT GlobalQvalue, ExternalId, HitId 
+                        FROM GlobalQualitativeConfidence") %>%
+      as_tibble %>% 
+      filter(ExternalId != 0) %>% 
+      dplyr::rename("BiologicalProteoformId" = ExternalId)
+    
+    datafile <- con %>%
+      RSQLite::dbGetQuery("SELECT Id, Name 
+                        FROM DataFile") %>%
+      as_tibble %>% 
+      dplyr::rename("DataFileId" = Id) %>% 
+      dplyr::rename("filename" = Name)
+    
+    resultset <- con %>%
+      RSQLite::dbGetQuery("SELECT Id, Name 
+                        FROM ResultSet") %>%
+      as_tibble %>% 
+      dplyr::rename("ResultSetId" = Id) %>% 
+      dplyr::rename("ResultSetName" = Name)
+    
+    isoform <- con %>%
+      RSQLite::dbGetQuery("SELECT Id, AccessionNumber 
+                        FROM Isoform") %>%
+      as_tibble %>% 
+      dplyr::rename("IsoformId" = Id)
+    
+    bioproteoform <- con %>%
+      RSQLite::dbGetQuery("SELECT Id, ProteoformRecordNum,
+                                  IsoformId,
+                                  ChemicalProteoformId
+                        FROM BiologicalProteoform") %>%
+      as_tibble %>% 
+      dplyr::rename("BiologicalProteoformId" = Id)
+    
+    chemprot <- con %>%
+      RSQLite::dbGetQuery("SELECT Id, MonoisotopicMass, 
+                        AverageMass 
+                        FROM ChemicalProteoform") %>%
+      as_tibble %>% 
+      dplyr::rename("ChemicalProteoformId" = Id)
+
+    
+    hit <- con %>%
+      RSQLite::dbGetQuery("SELECT Id, ResultSetId, DataFileId, ChemicalProteoformId
+                        FROM Hit") %>%
+      as_tibble %>% 
+      dplyr::rename("HitId" = Id)
+    
+    
+    entry <- con %>%
+      RSQLite::dbGetQuery("SELECT Id, AccessionNumber
+                        FROM Entry") %>%
+      as_tibble %>% 
+      dplyr::rename("EntryId" = Id)
+    
+  }
+  
+  output <- 
+    left_join(bioproteoform, isoform, by = "IsoformId") %>%
+    left_join(globalqualconf) %>%
+    left_join(hit) %>%
+    filter(GlobalQvalue <= fdr_cutoff) %>% 
+    filter(AccessionNumber %in% proteinlistin$AccessionNumber) %>% 
+    left_join(datafile) %>% 
+    left_join(chemprot)
+    
+
+  # Close database connection and return output table
+  
+  dbDisconnect(con)
+  
+  message("Finished checking corresponding protein entries for Q values above cutoff")
+
+  return(output)
 }
 
 getuniprotinfo <- function(tbl, taxon = NULL, tdreport = TRUE) {
@@ -351,9 +467,12 @@ getuniprotinfo2 <- function(tbl, filelistnum, tdreport = TRUE) {
   
   if (tdreport == TRUE) {
     
-    results <- dplyr::select(tbl, c(1, 3, 6, 7, 8, 9))
-    names(results) <- c("UNIPROTKB", "ProteoformRecordNum", "Qvalue", "filename",
-                        "MonoisotopicMass", "AverageMass")
+    results <- 
+      dplyr::select(tbl, c(!!accession_name, "ProteoformRecordNum",
+                           "GlobalQvalue", "filename",
+                           "MonoisotopicMass", "AverageMass")) %>% 
+      rename("UNIPROTKB" = AccessionNumber)
+
     
   } else {
     
@@ -363,7 +482,7 @@ getuniprotinfo2 <- function(tbl, filelistnum, tdreport = TRUE) {
 
   results <- results %>% 
     left_join(dplyr::select(results_protein[[filelistnum]],
-                            -c(Qvalue, 
+                            -c(GlobalQvalue, 
                                filename,
                                monoiso_mass,
                                ave_mass,
@@ -560,9 +679,10 @@ if (length(unique(extension)) > 1) {
 } else if (extension[[1]] == "tdReport") {
   
   message("Reading proteoform data from tdReport...")
-  proteoformlist <- future_map2(filelist, proteinlist, read_tdreport,
-                                fdr_cutoff = fdr,
-                                file_dir = filedir)
+  
+  proteoformlist <- future_map2(filelist, proteinlist, read_tdreport2,
+                                fdr_cutoff = fdr)
+  
   tdreport_file <- TRUE
   
 } else {
@@ -591,9 +711,10 @@ message("Getting UniProt info from protein results...")
 # keytypes <- UniProt.ws::keytypes(UPtaxon) %>% enframe
 # columns <- UniProt.ws::columns(UPtaxon) %>% enframe
 
-filelistnum <- as.list(seq_along(filelist))
+filelistnum <- seq_along(filelist) %>% as.list()
 
-results_proteoform <- proteoformlist %>% 
+results_proteoform <- 
+  proteoformlist %>% 
   future_map2(filelistnum,
               getuniprotinfo2,
               tdreport = tdreport_file)
