@@ -186,6 +186,11 @@ read_tdreport_full <- function(tdreport, fdr_cutoff = 0.01) {
   # Get relevant tables from TDReport using SQL
   
   {
+    globalqualconf <- con %>%
+      RSQLite::dbGetQuery("SELECT GlobalQvalue, HitId 
+                        FROM GlobalQualitativeConfidence") %>%
+      as_tibble
+    
     datafile <- con %>%
       RSQLite::dbGetQuery("SELECT Id, Name 
                         FROM DataFile") %>%
@@ -241,15 +246,27 @@ read_tdreport_full <- function(tdreport, fdr_cutoff = 0.01) {
   }
 
   allproteinhits <- 
-    left_join(isoform, bioproteoform) %>%
-    left_join(hit %>%
-                filter(HitId %in% q_vals$HitId),
-              by = "ChemicalProteoformId") %>%
-    left_join(q_vals) %>% 
-    dplyr::select(-c(ChemicalProteoformId, Id, EntryId, HitId)) %>% 
-    left_join(datafile) %>% 
+    left_join(hit, globalqualconf) %>% 
+    filter(GlobalQvalue <= 0.01) %>% 
+    left_join(datafile) %>%
     left_join(resultset) %>%
-    drop_na
+    left_join(bioproteoform) %>% 
+    left_join(isoform) %>% 
+    select(-c("HitId", "ChemicalProteoformId")) %>%
+    select("AccessionNumber", "filename",
+           "GlobalQvalue", "ResultSetName", everything()) %>% 
+    drop_na()
+  
+  # allproteinhits <- 
+  #   left_join(isoform, bioproteoform) %>%
+  #   left_join(hit %>%
+  #               filter(HitId %in% q_vals$HitId),
+  #             by = "ChemicalProteoformId") %>%
+  #   left_join(q_vals) %>% 
+  #   dplyr::select(-c(ChemicalProteoformId, Id, EntryId, HitId)) %>% 
+  #   left_join(datafile) %>%
+  #   left_join(resultset) %>%
+  #   drop_na
   
   output <- allproteinhits
   
@@ -266,6 +283,122 @@ read_tdreport_full <- function(tdreport, fdr_cutoff = 0.01) {
 }
 
 read_tdreport_byfilename <- function(tdreport, fdr_cutoff = 0.01) {
+  
+  # This function will return ALL hits above Q value threshold, not only the one
+  # with the lowest Q value. 
+  # Output is a tibble with all proteins split up by filename
+  
+  message(glue("\nEstablishing connection to {basename(tdreport)}..."))
+  
+  #Establish database connection. Keep trying until it works!
+  
+  safe_dbConnect <- safely(dbConnect)
+  
+  safecon <- safe_dbConnect(RSQLite::SQLite(), ":memory:", dbname = tdreport)
+  
+  if (is.null(safecon[["result"]]) == TRUE) message("Connection failed, trying again!")
+  
+  iteration_num <- 1
+  
+  while (is.null(safecon[["result"]]) == TRUE & iteration_num < 500) {
+    
+    iteration_num <- iteration_num + 1
+    
+    message(glue("\nTrying to establish database connection, attempt {iteration_num}"))
+    safecon <- safe_dbConnect(RSQLite::SQLite(), ":memory:",
+                              dbname = tdreport,
+                              synchronous = NULL)
+    
+  }
+  
+  if (is.null(safecon[["result"]]) == TRUE) stop("Failed to connect using SQLite!")
+  
+  con <- safecon[["result"]]
+  
+  # Get relevant tables from TDReport using SQL
+  {
+    globalqualconf <- con %>%
+      RSQLite::dbGetQuery("SELECT GlobalQvalue, HitId 
+                        FROM GlobalQualitativeConfidence") %>%
+      as_tibble
+    
+    datafile <- con %>%
+      RSQLite::dbGetQuery("SELECT Id, Name 
+                        FROM DataFile") %>%
+      as_tibble %>% 
+      dplyr::rename("DataFileId" = Id) %>% 
+      dplyr::rename("filename" = Name)
+    
+    isoform <- con %>%
+      RSQLite::dbGetQuery("SELECT Id, AccessionNumber 
+                        FROM Isoform") %>%
+      as_tibble %>% 
+      dplyr::rename("IsoformId" = Id)
+    
+    bioproteoform <- con %>%
+      RSQLite::dbGetQuery("SELECT IsoformId, ChemicalProteoformId
+                        FROM BiologicalProteoform") %>%
+      as_tibble
+    
+    hit <- con %>%
+      RSQLite::dbGetQuery("SELECT Id, DataFileId, ChemicalProteoformId
+                        FROM Hit") %>%
+      as_tibble %>% 
+      dplyr::rename("HitId" = Id)
+    
+    
+    entry <- con %>%
+      RSQLite::dbGetQuery("SELECT Id, AccessionNumber
+                        FROM Entry") %>%
+      as_tibble %>% 
+      dplyr::rename("EntryId" = Id)
+    
+    # Get Qvals and other info from "GlobalQualitativeConfidence"
+    # table, put it into a new tibble. Remove all values for Q
+    # values less than FDR cutoff
+    
+    q_vals <- con %>%
+      RSQLite::dbGetQuery("SELECT Id, ExternalId, GlobalQvalue, HitId
+                        FROM GlobalQualitativeConfidence") %>%
+      as_tibble %>%
+      filter(.$ExternalId != 0) %>%
+      filter(.$GlobalQvalue <= fdr_cutoff) %>%
+      dplyr::rename("EntryId" = ExternalId)
+    
+  }
+  
+  allproteinhits <-
+    left_join(isoform, bioproteoform) %>%
+    left_join(hit %>%
+                filter(HitId %in% q_vals$HitId),
+              by = "ChemicalProteoformId") %>%
+    left_join(q_vals) %>%
+    dplyr::select(-c(ChemicalProteoformId, Id, EntryId, HitId)) %>%
+    left_join(datafile) %>%
+    drop_na
+  
+  proteinhitsbyfilename <- 
+    allproteinhits %>% 
+    dplyr::select(-c("DataFileId", "IsoformId", "GlobalQvalue")) %>% 
+    pivot_wider(names_from = "filename",
+                values_from = "AccessionNumber",
+                values_fn = list(AccessionNumber = list))
+  
+  output <- proteinhitsbyfilename
+  
+  setwd(here())
+  
+  # Close database connection and return output table
+  
+  dbDisconnect(con)
+  
+  message("read_tdreport_byfilename Finished!")
+  
+  return(output)
+  
+}
+
+read_tdreport_byfraction <- function(tdreport, fdr_cutoff = 0.01) {
   
   # This function will return ALL hits above Q value threshold, not only the one
   # with the lowest Q value. 
@@ -353,16 +486,17 @@ read_tdreport_byfilename <- function(tdreport, fdr_cutoff = 0.01) {
     left_join(q_vals) %>% 
     dplyr::select(-c(ChemicalProteoformId, Id, EntryId, HitId)) %>% 
     left_join(datafile) %>% 
-    drop_na
+    drop_na %>%
+    addfraction()
   
-  proteinhitsbyfilename <- 
+  proteinhitsbyfraction <- 
     allproteinhits %>% 
-    dplyr::select(-c("DataFileId", "IsoformId", "GlobalQvalue")) %>% 
-    pivot_wider(names_from = "filename",
+    dplyr::select(-c("DataFileId", "IsoformId", "GlobalQvalue", "filename")) %>% 
+    pivot_wider(names_from = "fraction",
                 values_from = "AccessionNumber",
                 values_fn = list(AccessionNumber = list))
   
-  output <- proteinhitsbyfilename
+  output <- proteinhitsbyfraction
   
   setwd(here())
   
@@ -509,10 +643,10 @@ addfraction <- function(tbl) {
   tbl %>% 
     mutate(
       fraction = case_when(
-        stringr::str_detect(filename, "(?i)(?<=gf|peppi|frac|fraction|f)[0-9]{1,2}") == TRUE ~
+        stringr::str_detect(filename, "(?i)(?<=gf|peppi|frac|fraction|f|f_)[0-9]{1,2}") == TRUE ~
           stringr::str_extract(filename,
-                               "(?i)(?<=gf|peppi|frac|fraction|f)[0-9]{1,2}"),
-        stringr::str_detect(filename, "(?i)(?<=gf|peppi|frac|fraction|f)[0-9]{1,2}") == FALSE ~ "NA"
+                               "(?i)(?<=gf|peppi|frac|fraction|f|f_)[0-9]{1,2}"),
+        stringr::str_detect(filename, "(?i)(?<=gf|peppi|frac|fraction|f|f_)[0-9]{1,2}") == FALSE ~ "NA"
       )
     )
   
@@ -597,9 +731,151 @@ getlocations <- function(resultslist) {
   return(counts)
 }
 
+getlocations_protein <- function(resultslist) {
+  
+  # This function gets counts of membrane, cytosolic, and "both" proteoforms based on
+  # GO terms pulled from UniProt for each unique accession number.
+  
+  counts <- tibble(filename = basename(names(resultslist)),
+                   protein_count = NA,
+                   cytosol_count = NA,
+                   membrane_count = NA,
+                   periplasm_count = NA,
+                   NOTA_count = NA)
+  
+  for (i in seq_along(resultslist)) {
+    
+    tempresults <- tibble()
+    
+    # For every proteoform in each output, get the count of proteoforms whose GO terms
+    # include "cytosol" OR "cytoplasm", "membrane", or BOTH. 
+    # WE DO NOT DIFFERENTIATE BETWEEN MEMBRANE TYPES!
+    tempresults <- 
+      resultslist[[i]] %>% 
+      mutate(cytosol = str_detect(resultslist[[i]]$GO_subcell_loc,
+                                  c("cytosol|cytoplasm|ribosome"))) %>%
+      mutate(membrane = str_detect(resultslist[[i]]$GO_subcell_loc, 
+                                   c("membrane")) &
+               !str_detect(resultslist[[i]]$GO_subcell_loc, 
+                           c("membrane-bounded periplasmic space"))) %>% 
+      mutate(periplasm = str_detect(resultslist[[i]]$GO_subcell_loc,
+                                    c("periplasm")))
+    
+    # For cytosol_count and membrane_count, ONLY count the accessions which are NOT 
+    # found in the list of accessions including both "cytosol|cytoplasm" and "membrane".
+    # This prevents double-counting of proteoforms by localization
+    
+    counts$protein_count[i] <- tempresults %>% .$UNIPROTKB %>% length()
+    
+    counts$cytosol_count[i] <- sum(tempresults$cytosol)
+    
+    counts$membrane_count[i] <- sum(tempresults$membrane)
+    
+    counts$periplasm_count[i] <- sum(tempresults$periplasm)
+    
+    counts$NOTA_count[i] <- tally(tempresults %>% 
+                                    filter(cytosol == FALSE) %>% 
+                                    filter(membrane == FALSE) %>% 
+                                    filter(periplasm == FALSE)) %>%
+      .$n
+    
+  }
+  
+  return(counts)
+}
+
+getlocations_bydatafile <- function(resultslist) {
+  
+  # This function gets counts of membrane, cytosolic, and "both" proteoforms based on
+  # GO terms pulled from UniProt for each unique accession number.
+  
+  counts <- tibble()
+  
+  for (i in seq_along(resultslist)) {
+    
+    tempresults <- tibble()
+    
+    # For every proteoform in each output, get the count of proteoforms whose GO terms
+    # include "cytosol" OR "cytoplasm", "membrane", or BOTH. 
+    # WE DO NOT DIFFERENTIATE BETWEEN MEMBRANE TYPES!
+    tempresults <- 
+      resultslist[[i]] %>% 
+      mutate(tdreport_name = names(resultslist)[[i]]) %>% 
+      mutate(cytosol = str_detect(resultslist[[i]]$GO_subcell_loc,
+                                  c("cytosol|cytoplasm|ribosome"))) %>%
+      mutate(membrane = str_detect(resultslist[[i]]$GO_subcell_loc, 
+                                   c("membrane")) &
+               !str_detect(resultslist[[i]]$GO_subcell_loc, 
+                           c("membrane-bounded periplasmic space"))) %>% 
+      mutate(periplasm = str_detect(resultslist[[i]]$GO_subcell_loc,
+                                    c("periplasm"))) %>% 
+      mutate(NOTA = !str_detect(resultslist[[i]]$GO_subcell_loc,
+                                c("cytosol|cytoplasm|ribosome")) &
+               !str_detect(resultslist[[i]]$GO_subcell_loc, 
+                           c("membrane")) &
+               !str_detect(resultslist[[i]]$GO_subcell_loc, 
+                           c("membrane-bounded periplasmic space")) &
+               !str_detect(resultslist[[i]]$GO_subcell_loc,
+                           c("periplasm"))
+      )
+    
+    # 
+    
+    tempresultssummary <- 
+      tempresults %>%
+      group_by(tdreport_name, filename, fraction) %>%
+      summarize(
+        protein_count = n(),
+        cytosol_count = sum(cytosol),
+        membrane_count = sum(membrane),
+        periplasm_count = sum(periplasm),
+        NOTA_count = sum(NOTA)
+      )
+    
+    counts <- 
+      union_all(tempresultssummary, counts)
+    
+  }
+  
+  return(counts)
+}
+
 savePLBF <- function(input_tbbl, filename) {
   
   # Save proteinlist by filename
+  
+  workbook <- createWorkbook()
+  
+  shortfilename <- 
+    filename %>%
+    basename %>%
+    file_path_sans_ext %>% 
+    str_trunc(30, "left")
+  
+  workbook %>% addWorksheet(shortfilename)
+  
+  for (i in seq_along(input_tbbl)) {
+    
+    workbook %>% writeData(shortfilename,
+                           names(input_tbbl)[[i]],
+                           startCol = i,
+                           startRow = 1)
+    
+    
+    workbook %>% writeData(shortfilename,
+                           pull(input_tbbl, i) %>% as_vector %>% unique,
+                           startCol = i,
+                           startRow = 2)
+    
+  }
+  
+  return(workbook)
+  
+}
+
+savePLBFrac <- function(input_tbbl, filename) {
+  
+  # Save proteinlist by fraction
   
   workbook <- createWorkbook()
   
@@ -668,6 +944,10 @@ if (length(unique(extension)) > 1) {
   message("Reading protein data by file name from tdReport...")
   proteinlistbyfilename <- filelist %>% 
     future_map(read_tdreport_byfilename, fdr_cutoff = fdr)
+  
+  message("Attempting to read protein data by fraction from tdReport...")
+  proteinlistbyfraction <- filelist %>% 
+    future_map(read_tdreport_byfraction, fdr_cutoff = fdr)
 
   tdreport_file <- TRUE
   
@@ -713,7 +993,16 @@ proteinlistfull <-
   future_map(addmasses) %>%
   future_map(addfraction)
   
-results_protein[[length(results_protein)+1]] <- getlocations(results_protein)
+results_protein[[length(results_protein)+1]] <- getlocations_protein(results_protein)
+
+names(results_protein) <- unlist(filelist) %>% basename()
+
+## This chunk will get protein location counts by datafile (.raw file) instead
+## of for each TDreport in the analysis
+
+protein_counts_bydatafile <- 
+  results_protein[1 : length(results_protein) - 1] %>% 
+  getlocations_bydatafile()
 
 # Output --------------------------------------------------------------------------------------
 
@@ -728,7 +1017,7 @@ if (exists("systime") == FALSE) systime <- format(Sys.time(), "%Y%m%d_%H%M%S")
 resultsname <- glue("{systime}_protein_results.xlsx")
 resultsobjectname <- glue("{systime}_protein_results.rds")
 
-names(results_protein) <- unlist(filelist) %>% basename
+names(results_protein) <- unlist(filelist) %>% basename()
 names(results_protein)[length(results_protein)] <- "SUMMARY"
 
 for (i in seq_along(names(results_protein))) {
@@ -783,6 +1072,30 @@ if (tdreport_file == TRUE) {
     as.list
   
   map2(PLBFlist, PLBFnameslist, ~saveWorkbook(.x, .y, overwrite = TRUE))
+  
+  # Save list of proteins by fraction ---------------------------------------
+  
+  if (dir.exists("proteinsbyfraction") == FALSE) dir.create("proteinsbyfraction")
+  
+  PLBFrac_list <- 
+    map2(proteinlistbyfraction, filelist, savePLBFrac)
+  
+  PLBFrac_nameslist <- 
+    filelist %>%
+    map(basename) %>%
+    map(file_path_sans_ext) %>%
+    glue_data("proteinsbyfraction/{.}.xlsx") %>% 
+    as.list
+  
+  map2(PLBFrac_list, PLBFrac_nameslist, ~saveWorkbook(.x, .y, overwrite = TRUE))
+  
+
+  # Save counts by datafile -------------------------------------------------
+
+  if (dir.exists("countsbydatafile") == FALSE) dir.create("countsbydatafile")
+  
+  protein_counts_bydatafile %>% 
+    writexl::write_xlsx(path = glue("countsbydatafile/{systime}_counts_bydatafile.xlsx"))
   
 }
 
