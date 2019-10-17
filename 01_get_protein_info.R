@@ -294,29 +294,30 @@ read_tdreport_full <- function(tdreport, fdr_cutoff = 0.01) {
   # Get relevant tables from TDReport using SQL
   
   {
+    
     globalqualconf <- con %>%
       RSQLite::dbGetQuery("SELECT GlobalQvalue, HitId 
                         FROM GlobalQualitativeConfidence") %>%
-      as_tibble
+      as_tibble()
     
     datafile <- con %>%
       RSQLite::dbGetQuery("SELECT Id, Name 
                         FROM DataFile") %>%
-      as_tibble %>% 
+      as_tibble() %>% 
       dplyr::rename("DataFileId" = Id) %>% 
       dplyr::rename("filename" = Name)
     
     resultset <- con %>%
       RSQLite::dbGetQuery("SELECT Id, Name 
                         FROM ResultSet") %>%
-      as_tibble %>% 
+      as_tibble() %>% 
       dplyr::rename("ResultSetId" = Id) %>% 
       dplyr::rename("ResultSetName" = Name)
     
     isoform <- con %>%
       RSQLite::dbGetQuery("SELECT Id, AccessionNumber, Sequence 
                         FROM Isoform") %>%
-      as_tibble %>% 
+      as_tibble() %>% 
       dplyr::rename("IsoformId" = Id) %>% 
       dplyr::rename("SEQUENCE" = Sequence)
     
@@ -324,32 +325,20 @@ read_tdreport_full <- function(tdreport, fdr_cutoff = 0.01) {
     bioproteoform <- con %>%
       RSQLite::dbGetQuery("SELECT IsoformId, ChemicalProteoformId
                         FROM BiologicalProteoform") %>%
-      as_tibble
+      as_tibble()
     
     hit <- con %>%
       RSQLite::dbGetQuery("SELECT Id, ResultSetId, DataFileId, ChemicalProteoformId
                         FROM Hit") %>%
-      as_tibble %>% 
+      as_tibble() %>% 
       dplyr::rename("HitId" = Id)
     
     
     entry <- con %>%
       RSQLite::dbGetQuery("SELECT Id, AccessionNumber
                         FROM Entry") %>%
-      as_tibble %>% 
+      as_tibble() %>% 
       dplyr::rename("EntryId" = Id)
-    
-    # Get Qvals and other info from "GlobalQualitativeConfidence"
-    # table, put it into a new tibble. Remove all values for Q
-    # values less than FDR cutoff
-    
-    q_vals <- con %>%
-      RSQLite::dbGetQuery("SELECT Id, ExternalId, GlobalQvalue, HitId
-                        FROM GlobalQualitativeConfidence") %>%
-      as_tibble %>%
-      filter(.$ExternalId != 0) %>%
-      filter(.$GlobalQvalue <= fdr_cutoff) %>%
-      dplyr::rename("EntryId" = ExternalId)
     
   }
 
@@ -365,28 +354,13 @@ read_tdreport_full <- function(tdreport, fdr_cutoff = 0.01) {
            "GlobalQvalue", "ResultSetName", everything()) %>% 
     drop_na()
   
-  # allproteinhits <- 
-  #   left_join(isoform, bioproteoform) %>%
-  #   left_join(hit %>%
-  #               filter(HitId %in% q_vals$HitId),
-  #             by = "ChemicalProteoformId") %>%
-  #   left_join(q_vals) %>% 
-  #   dplyr::select(-c(ChemicalProteoformId, Id, EntryId, HitId)) %>% 
-  #   left_join(datafile) %>%
-  #   left_join(resultset) %>%
-  #   drop_na
-  
-  output <- allproteinhits
-  
-  setwd(here())
-  
   # Close database connection and return output table
   
   dbDisconnect(con)
   
   message("read_tdreport_full Finished!")
   
-  return(output)
+  return(allproteinhits)
   
 }
 
@@ -705,7 +679,8 @@ getuniprotinfo <- function(tbl, taxon = NULL, tdreport = TRUE) {
   
 }
 
-getuniprotinfo2 <- function(listofproteins, taxon = NULL, database = NULL, tdrep = TRUE) {
+getuniprotinfo2 <- function(listofproteins, taxon = NULL,
+                            database = NULL, tdrep = TRUE) {
   
   message("Retrieving info from UniProt...")
   
@@ -717,8 +692,9 @@ getuniprotinfo2 <- function(listofproteins, taxon = NULL, database = NULL, tdrep
   
   if (tdrep == TRUE) {
     
-    listofproteins <- listofproteins %>% 
-      dplyr::select(-c(Id), "UNIPROTKB" := !!accession_name)
+    listofproteins <- 
+      listofproteins %>% 
+      dplyr::rename("UNIPROTKB" := !!accession_name)
     
   } else {
     
@@ -729,7 +705,6 @@ getuniprotinfo2 <- function(listofproteins, taxon = NULL, database = NULL, tdrep
   left_join(listofproteins, database)
   
 }
-
 
 addmasses <- function(tbl) {
   
@@ -751,10 +726,12 @@ addfraction <- function(tbl) {
   tbl %>% 
     mutate(
       fraction = case_when(
-        stringr::str_detect(filename, "(?i)(?<=gf|peppi|frac|fraction|f|f_)[0-9]{1,2}") == TRUE ~
+        stringr::str_detect(filename,
+                            "(?i)(?<=gf|peppi|frac|fraction|f|f_)[0-9]{1,2}") == TRUE ~
           stringr::str_extract(filename,
                                "(?i)(?<=gf|peppi|frac|fraction|f|f_)[0-9]{1,2}"),
-        stringr::str_detect(filename, "(?i)(?<=gf|peppi|frac|fraction|f|f_)[0-9]{1,2}") == FALSE ~ "NA"
+        stringr::str_detect(filename,
+                            "(?i)(?<=gf|peppi|frac|fraction|f|f_)[0-9]{1,2}") == FALSE ~ "NA"
       )
     )
   
@@ -772,11 +749,18 @@ getGOterms <- function(tbl, file_list) {
   
   for (i in seq_along(tbl$`GO-ID`)) {
     
-    temptbl$GO_term[i] <- unlist(strsplit(temptbl$`GO-ID`[i], ";")) %>% 
-      trimws() %>% Term() %>% paste(collapse = "; ")
+    temptbl$GO_term[i] <- 
+      unlist(strsplit(temptbl$`GO-ID`[i], ";")) %>% 
+      trimws() %>%
+      Term() %>%
+      paste(collapse = "; ")
     
-    temptbl$GO_subcell_loc[i] <- unlist(strsplit(temptbl$`GO-ID`[i], ";")) %>%
-      trimws() %>% Term() %>% .[. %in% go_locs] %>% paste(collapse = "; ")
+    temptbl$GO_subcell_loc[i] <-
+      unlist(strsplit(temptbl$`GO-ID`[i], ";")) %>%
+      trimws() %>%
+      Term() %>%
+      .[. %in% go_locs] %>%
+      paste(collapse = "; ")
     
   }
   
@@ -1043,7 +1027,7 @@ if (length(unique(extension)) > 1) {
 } else if (extension[[1]] == "tdReport") {
   
   message("Reading protein data from tdReport...")
-  proteinlist <- filelist %>% future_map(read_tdreport, fdr_cutoff = fdr)
+  proteinlist <- filelist %>% future_map(read_tdreport2, fdr_cutoff = fdr)
   
   message("Reading full protein data from tdReport...")
   proteinlistfull <- filelist %>% 
