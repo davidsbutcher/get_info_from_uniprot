@@ -47,7 +47,10 @@ setwd(here())
 # You can also add the full path to a single file (including extension).
 
 filedir <- 
-  c("Z:/ICR/David Butcher/TDReports/201906_EcoliMG1655_GELFrEE/")
+  c("Z:/ICR/David Butcher/TDReports/EcoliMG1655/
+  20190916_EcoliMG1655_GELFrEE_red_alk/
+    20190916_EcoliMG1655WCL_M9-O+L-20190515_2runs_CAMSEARCH.tdReport") %>% 
+  str_replace_all("\\n *", "")
 
 # Specify false discovery rate to use for rejection of hits (as decimal)
 # when using a tdReport as input - 0.01 is 1% FDR
@@ -73,7 +76,7 @@ use_PB <- TRUE
 
 # Should a summary be generated for this analysis?
 
-make_report <- FALSE
+make_report <- TRUE
 
 # Functions ---------------------------------------------------------------
 
@@ -198,12 +201,19 @@ source("01_get_protein_info.R")
 source("02_get_proteoform_info.R")
 source("03_output_plots.R")
 
-if (make_report == TRUE) source("04_generate_report.R")
+if (make_report == TRUE) {
+  
+  rmarkdown::render("04_generate_report.Rmd",
+                    output_file = glue("output/report/{systime}_report.html"))
+  
+}
 
-totaltime <- capture.output(toc()) %>%
+totaltime <- 
+  capture.output(toc()) %>%
   str_extract("[0-9]+") %>%
   as.numeric %>%
-  `/`(60) %>% round(digits = 2)
+  `/`(60) %>%
+  round(digits = 2)
 
 print(glue("Elapsed time: {totaltime} min"))
 
