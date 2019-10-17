@@ -99,13 +99,39 @@ for (i in seq_along(filelist)) {
 
 `r paste(knitr::knit(text = out), collapse = '\n\n')`
 
-### All Protein Hits {.tabset .tabset-fade}
+### All Protein Hits - Tables {.tabset .tabset-fade}
 
 ```{r all-protein-hits, echo = FALSE, height = "500px"}
 
 out <-  NULL
 for (i in seq_along(filelist)) {
   out = c(out, knitr::knit_expand("output/report/template/all-protein-hits.Rmd"))
+}
+
+```
+
+`r paste(knitr::knit(text = out), collapse = '\n\n')`
+
+### All Protein Hits - Counts by Filename {.tabset .tabset-fade}
+
+```{r, echo = FALSE}
+
+out <-  NULL
+for (i in seq_along(filelist)) {
+  out = c(out, knitr::knit_expand("output/report/template/protein-allhits-mass-histograms-01a.Rmd"))
+}
+
+```
+
+`r paste(knitr::knit(text = out), collapse = '\n\n')`
+
+### All Protein Hits - Counts by Fraction {.tabset .tabset-fade}
+
+```{r, echo = FALSE}
+
+out <-  NULL
+for (i in seq_along(filelist)) {
+  out = c(out, knitr::knit_expand("output/report/template/protein-allhits-mass-histograms-01b.Rmd"))
 }
 
 ```
