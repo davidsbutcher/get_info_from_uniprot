@@ -19,8 +19,6 @@ All input parameters are given in 00_run_all.R, in the "Initialize Parameters" s
 
 - `taxon_number <- 83333` UniProt taxon number for organism of interest. Defaults to 83333 for *E. coli* K12. Value for *Homo sapiens* is 9606. Taxons 83333 and 9606 are predownloaded (in /input), any other taxon number will take some time to download (about 20 minutes for taxon 83333).
 
-- `go_locs_file <- "QuickGO_annotations_20190708.tsv"` This file will be used to determine which GO terms correspond to subcellular locations. This should not need to be changed.
-
 - `use_PB <- FALSE` Optional parameter. If set to true, `RPushbullet` will be used to send a Pushbullet notification to your device when the analysis is finished. See `?RPushbullet::pbSetup` for more info.
 
 - `make_report <- FALSE` Controls whether a summary HTML report is generated in the `output/report` folder. Though it will work, I wouldn't reccomend doing this with an analysis of >12 TD reports.
