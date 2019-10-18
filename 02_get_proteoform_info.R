@@ -717,7 +717,8 @@ results_proteoform <-
   proteoformlist %>% 
   future_map2(filelistnum,
               getuniprotinfo2,
-              tdreport = tdreport_file)
+              tdreport = tdreport_file) %>% 
+  future_map(addfraction)
 
 if (tdreport_file == FALSE) {
   
