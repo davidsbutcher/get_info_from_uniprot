@@ -49,7 +49,10 @@ setwd(here())
 filedir <- 
   c("Z:/ICR/David Butcher/TDReports/EcoliMG1655/
   20190916_EcoliMG1655_GELFrEE_red_alk/
-    20190916_EcoliMG1655WCL_M9-O+L-20190515_2runs_CAMSEARCH.tdReport") %>% 
+    20190916_EcoliMG1655WCL_M9-O+L-20190515_2runs_CAMSEARCH.tdReport",
+    "Z:/ICR/David Butcher/TDReports/EcoliMG1655/
+  201909_EcoliMG1655_PEPPI_M9/
+  20190907_EcoliMG1655_PEPPI_M9_F01-F09_CAMsearch.tdReport") %>% 
   str_replace_all("\\n *", "")
 
 # Specify false discovery rate to use for rejection of hits (as decimal)
@@ -62,13 +65,6 @@ fdr <- 0.01
 # 9606 -> Homo sapiens
 
 taxon_number <- 83333
-
-# QuickGO_annotations_20190708.tsv contains all GO IDs and corresponding
-# GO terms associated with cellular components, i.e. subcellular localization.
-# Loading it provides a lookup table we can use to get subcell loc. for
-# any relevant GO IDs
-
-go_locs_file <- "QuickGO_annotations_20190708.tsv"
 
 # Should PushBullet be used to notify when the script is finished?
 
@@ -183,11 +179,7 @@ message("CONNECTION SUCCEEDED.")
 # Load file containing locations corresponding to
 # GO terms
 
-go_locs <- go_locs_file %>%
-  read_tsv() %>%
-  .["GO NAME"] %>%
-  unique() %>%
-  pull()
+go_locs <- readRDS("input/GO_subcellular_locations.rds")
 
 # Run Scripts ---------------------------------------------------------------------------------
 
