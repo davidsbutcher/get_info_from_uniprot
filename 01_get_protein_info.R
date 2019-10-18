@@ -219,10 +219,10 @@ read_tdreport2 <- function(tdreport, fdr_cutoff = 0.01) {
       dplyr::rename("SEQUENCE" = Sequence)
     
     
-    bioproteoform <- con %>%
-      RSQLite::dbGetQuery("SELECT IsoformId, ChemicalProteoformId
-                        FROM BiologicalProteoform") %>%
-      as_tibble
+    # bioproteoform <- con %>%
+    #   RSQLite::dbGetQuery("SELECT IsoformId, ChemicalProteoformId
+    #                     FROM BiologicalProteoform") %>%
+    #   as_tibble
     
     hit <- con %>%
       RSQLite::dbGetQuery("SELECT Id, ResultSetId, DataFileId, ChemicalProteoformId
@@ -231,11 +231,11 @@ read_tdreport2 <- function(tdreport, fdr_cutoff = 0.01) {
       dplyr::rename("HitId" = Id)
     
     
-    entry <- con %>%
-      RSQLite::dbGetQuery("SELECT Id, AccessionNumber
-                        FROM Entry") %>%
-      as_tibble %>% 
-      dplyr::rename("EntryId" = Id)
+    # entry <- con %>%
+    #   RSQLite::dbGetQuery("SELECT Id, AccessionNumber
+    #                     FROM Entry") %>%
+    #   as_tibble %>% 
+    #   dplyr::rename("EntryId" = Id)
     
   }
   
