@@ -206,8 +206,6 @@ Reduce(intersect, PFRlist) %>%
 
 </details>
 
-### Mass Histograms
-
 ## Session Info
 
 This is the session info for the R session which generated the results above.
