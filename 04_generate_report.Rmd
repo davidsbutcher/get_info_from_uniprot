@@ -53,7 +53,7 @@ This data corresponds to the lowest Q-value hits for each protein in each TD rep
 
 out <-  NULL
 for (i in seq_along(filelist)) {
-  out = c(out, knitr::knit_expand("output/report/template/best-protein-hits-tables.Rmd"))
+  out = c(out, knitr::knit_expand("extras/report_template/best-protein-hits-tables.Rmd"))
 }
 
 ```
@@ -66,7 +66,7 @@ for (i in seq_along(filelist)) {
 
 out <-  NULL
 for (i in seq_along(filelist)) {
-  out = c(out, knitr::knit_expand("output/report/template/protein-mass-histograms-01a.Rmd"))
+  out = c(out, knitr::knit_expand("extras/report_template/protein-mass-histograms-01a.Rmd"))
 }
 
 ```
@@ -79,7 +79,7 @@ for (i in seq_along(filelist)) {
 
 out <-  NULL
 for (i in seq_along(filelist)) {
-  out = c(out, knitr::knit_expand("output/report/template/protein-mass-histograms-01b.Rmd"))
+  out = c(out, knitr::knit_expand("extras/report_template/protein-mass-histograms-01b.Rmd"))
 }
 
 ```
@@ -92,7 +92,33 @@ for (i in seq_along(filelist)) {
 
 out <-  NULL
 for (i in seq_along(filelist)) {
-  out = c(out, knitr::knit_expand("output/report/template/protein-mass-histograms-02.Rmd"))
+  out = c(out, knitr::knit_expand("extras/report_template/protein-mass-histograms-02.Rmd"))
+}
+
+```
+
+`r paste(knitr::knit(text = out), collapse = '\n\n')`
+
+### Best Protein Hits - Mass Distributions by Fraction {.tabset .tabset-fade}
+
+```{r, echo = FALSE}
+
+out <-  NULL
+for (i in seq_along(filelist)) {
+  out = c(out, knitr::knit_expand("extras/report_template/protein-mass-histograms-03.Rmd"))
+}
+
+```
+
+`r paste(knitr::knit(text = out), collapse = '\n\n')`
+
+### Best Protein Hits - Mass Distributions by Fraction, Heatmaps {.tabset .tabset-fade}
+
+```{r, echo = FALSE}
+
+out <-  NULL
+for (i in seq_along(filelist)) {
+  out = c(out, knitr::knit_expand("extras/report_template/protein-mass-heatmap.Rmd"))
 }
 
 ```
@@ -105,7 +131,7 @@ for (i in seq_along(filelist)) {
 
 out <-  NULL
 for (i in seq_along(filelist)) {
-  out = c(out, knitr::knit_expand("output/report/template/all-protein-hits.Rmd"))
+  out = c(out, knitr::knit_expand("extras/report_template/all-protein-hits.Rmd"))
 }
 
 ```
@@ -118,7 +144,7 @@ for (i in seq_along(filelist)) {
 
 out <-  NULL
 for (i in seq_along(filelist)) {
-  out = c(out, knitr::knit_expand("output/report/template/protein-allhits-mass-histograms-01a.Rmd"))
+  out = c(out, knitr::knit_expand("extras/report_template/protein-allhits-mass-histograms-01a.Rmd"))
 }
 
 ```
@@ -131,7 +157,7 @@ for (i in seq_along(filelist)) {
 
 out <-  NULL
 for (i in seq_along(filelist)) {
-  out = c(out, knitr::knit_expand("output/report/template/protein-allhits-mass-histograms-01b.Rmd"))
+  out = c(out, knitr::knit_expand("extras/report_template/protein-allhits-mass-histograms-01b.Rmd"))
 }
 
 ```
@@ -166,7 +192,20 @@ Reduce(intersect, accessionlist) %>%
 
 out <-  NULL
 for (i in seq_along(filelist)) {
-  out = c(out, knitr::knit_expand("output/report/template/best-proteoform-hits.Rmd"))
+  out = c(out, knitr::knit_expand("extras/report_template/best-proteoform-hits.Rmd"))
+}
+
+```
+
+`r paste(knitr::knit(text = out), collapse = '\n\n')`
+
+### Best Proteoform Hits - Mass Distributions by Fraction, Heatmaps {.tabset .tabset-fade}
+
+```{r, echo = FALSE}
+
+out <-  NULL
+for (i in seq_along(filelist)) {
+  out = c(out, knitr::knit_expand("extras/report_template/proteoform-mass-heatmap.Rmd"))
 }
 
 ```
