@@ -399,76 +399,75 @@ read_tdreport_byfilename <- function(tdreport, fdr_cutoff = 0.01) {
   
   # Get relevant tables from TDReport using SQL
   {
+    
     globalqualconf <- con %>%
       RSQLite::dbGetQuery("SELECT GlobalQvalue, HitId 
                         FROM GlobalQualitativeConfidence") %>%
-      as_tibble
+      as_tibble()
     
     datafile <- con %>%
       RSQLite::dbGetQuery("SELECT Id, Name 
                         FROM DataFile") %>%
-      as_tibble %>% 
+      as_tibble() %>% 
       dplyr::rename("DataFileId" = Id) %>% 
       dplyr::rename("filename" = Name)
     
+    resultset <- con %>%
+      RSQLite::dbGetQuery("SELECT Id, Name 
+                        FROM ResultSet") %>%
+      as_tibble() %>% 
+      dplyr::rename("ResultSetId" = Id) %>% 
+      dplyr::rename("ResultSetName" = Name)
+    
     isoform <- con %>%
-      RSQLite::dbGetQuery("SELECT Id, AccessionNumber 
+      RSQLite::dbGetQuery("SELECT Id, AccessionNumber, Sequence 
                         FROM Isoform") %>%
-      as_tibble %>% 
-      dplyr::rename("IsoformId" = Id)
+      as_tibble() %>% 
+      dplyr::rename("IsoformId" = Id) %>% 
+      dplyr::rename("SEQUENCE" = Sequence)
+    
     
     bioproteoform <- con %>%
       RSQLite::dbGetQuery("SELECT IsoformId, ChemicalProteoformId
                         FROM BiologicalProteoform") %>%
-      as_tibble
+      as_tibble()
     
     hit <- con %>%
-      RSQLite::dbGetQuery("SELECT Id, DataFileId, ChemicalProteoformId
+      RSQLite::dbGetQuery("SELECT Id, ResultSetId, DataFileId, ChemicalProteoformId
                         FROM Hit") %>%
-      as_tibble %>% 
+      as_tibble() %>% 
       dplyr::rename("HitId" = Id)
     
     
     entry <- con %>%
       RSQLite::dbGetQuery("SELECT Id, AccessionNumber
                         FROM Entry") %>%
-      as_tibble %>% 
+      as_tibble() %>% 
       dplyr::rename("EntryId" = Id)
-    
-    # Get Qvals and other info from "GlobalQualitativeConfidence"
-    # table, put it into a new tibble. Remove all values for Q
-    # values less than FDR cutoff
-    
-    q_vals <- con %>%
-      RSQLite::dbGetQuery("SELECT Id, ExternalId, GlobalQvalue, HitId
-                        FROM GlobalQualitativeConfidence") %>%
-      as_tibble %>%
-      filter(.$ExternalId != 0) %>%
-      filter(.$GlobalQvalue <= fdr_cutoff) %>%
-      dplyr::rename("EntryId" = ExternalId)
     
   }
   
-  allproteinhits <-
-    left_join(isoform, bioproteoform) %>%
-    left_join(hit %>%
-                filter(HitId %in% q_vals$HitId),
-              by = "ChemicalProteoformId") %>%
-    left_join(q_vals) %>%
-    dplyr::select(-c(ChemicalProteoformId, Id, EntryId, HitId)) %>%
+  allproteinhits <- 
+    left_join(hit, globalqualconf) %>% 
+    filter(GlobalQvalue <= fdr_cutoff) %>% 
     left_join(datafile) %>%
-    drop_na
+    left_join(resultset) %>%
+    left_join(bioproteoform) %>% 
+    left_join(isoform) %>% 
+    select(-c("HitId", "ChemicalProteoformId")) %>%
+    select("AccessionNumber", "filename",
+           "GlobalQvalue", "ResultSetName", everything()) %>% 
+    drop_na()
   
   proteinhitsbyfilename <- 
     allproteinhits %>% 
-    dplyr::select(-c("DataFileId", "IsoformId", "GlobalQvalue")) %>% 
+    dplyr::select(-c("GlobalQvalue", "ResultSetName", "ResultSetId", 
+                     "DataFileId", "IsoformId", "SEQUENCE")) %>% 
     pivot_wider(names_from = "filename",
                 values_from = "AccessionNumber",
                 values_fn = list(AccessionNumber = list))
   
   output <- proteinhitsbyfilename
-  
-  setwd(here())
   
   # Close database connection and return output table
   
@@ -515,72 +514,78 @@ read_tdreport_byfraction <- function(tdreport, fdr_cutoff = 0.01) {
   
   # Get relevant tables from TDReport using SQL
   {
+    
+    globalqualconf <- con %>%
+      RSQLite::dbGetQuery("SELECT GlobalQvalue, HitId 
+                        FROM GlobalQualitativeConfidence") %>%
+      as_tibble()
+    
     datafile <- con %>%
       RSQLite::dbGetQuery("SELECT Id, Name 
                         FROM DataFile") %>%
-      as_tibble %>% 
+      as_tibble() %>% 
       dplyr::rename("DataFileId" = Id) %>% 
       dplyr::rename("filename" = Name)
     
+    resultset <- con %>%
+      RSQLite::dbGetQuery("SELECT Id, Name 
+                        FROM ResultSet") %>%
+      as_tibble() %>% 
+      dplyr::rename("ResultSetId" = Id) %>% 
+      dplyr::rename("ResultSetName" = Name)
+    
     isoform <- con %>%
-      RSQLite::dbGetQuery("SELECT Id, AccessionNumber 
+      RSQLite::dbGetQuery("SELECT Id, AccessionNumber, Sequence 
                         FROM Isoform") %>%
-      as_tibble %>% 
-      dplyr::rename("IsoformId" = Id)
+      as_tibble() %>% 
+      dplyr::rename("IsoformId" = Id) %>% 
+      dplyr::rename("SEQUENCE" = Sequence)
+    
     
     bioproteoform <- con %>%
       RSQLite::dbGetQuery("SELECT IsoformId, ChemicalProteoformId
                         FROM BiologicalProteoform") %>%
-      as_tibble
+      as_tibble()
     
     hit <- con %>%
-      RSQLite::dbGetQuery("SELECT Id, DataFileId, ChemicalProteoformId
+      RSQLite::dbGetQuery("SELECT Id, ResultSetId, DataFileId, ChemicalProteoformId
                         FROM Hit") %>%
-      as_tibble %>% 
+      as_tibble() %>% 
       dplyr::rename("HitId" = Id)
     
     
     entry <- con %>%
       RSQLite::dbGetQuery("SELECT Id, AccessionNumber
                         FROM Entry") %>%
-      as_tibble %>% 
+      as_tibble() %>% 
       dplyr::rename("EntryId" = Id)
-    
-    # Get Qvals and other info from "GlobalQualitativeConfidence"
-    # table, put it into a new tibble. Remove all values for Q
-    # values less than FDR cutoff
-    
-    q_vals <- con %>%
-      RSQLite::dbGetQuery("SELECT Id, ExternalId, GlobalQvalue, HitId
-                        FROM GlobalQualitativeConfidence") %>%
-      as_tibble %>%
-      filter(.$ExternalId != 0) %>%
-      filter(.$GlobalQvalue <= fdr_cutoff) %>%
-      dplyr::rename("EntryId" = ExternalId)
     
   }
   
   allproteinhits <- 
-    left_join(isoform, bioproteoform) %>%
-    left_join(hit %>%
-                filter(HitId %in% q_vals$HitId),
-              by = "ChemicalProteoformId") %>%
-    left_join(q_vals) %>% 
-    dplyr::select(-c(ChemicalProteoformId, Id, EntryId, HitId)) %>% 
-    left_join(datafile) %>% 
-    drop_na %>%
+    left_join(hit, globalqualconf) %>% 
+    filter(GlobalQvalue <= fdr_cutoff) %>% 
+    left_join(datafile) %>%
+    left_join(resultset) %>%
+    left_join(bioproteoform) %>% 
+    left_join(isoform) %>% 
+    select(-c("HitId", "ChemicalProteoformId")) %>%
+    select("AccessionNumber", "filename",
+           "GlobalQvalue", "ResultSetName", everything()) %>% 
+    drop_na() %>% 
     addfraction()
   
   proteinhitsbyfraction <- 
     allproteinhits %>% 
-    dplyr::select(-c("DataFileId", "IsoformId", "GlobalQvalue", "filename")) %>% 
+    dplyr::select(-c("DataFileId", "IsoformId", "GlobalQvalue", "filename",
+                     "ResultSetName", "ResultSetId", "SEQUENCE")) %>% 
     pivot_wider(names_from = "fraction",
                 values_from = "AccessionNumber",
-                values_fn = list(AccessionNumber = list))
+                values_fn = list(AccessionNumber = list)) %>%
+    dplyr::rename_all(function(x) paste0("Frac_", x))
+    
   
   output <- proteinhitsbyfraction
-  
-  setwd(here())
   
   # Close database connection and return output table
   
