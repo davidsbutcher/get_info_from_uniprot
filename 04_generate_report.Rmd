@@ -32,6 +32,7 @@ knitr::opts_chunk$set(echo = FALSE)
 
 ```
 
+*Report generated `r format(Sys.time(), '%B %d, %Y')`*
 
 This is an automatically generated document containing GUPPI analysis results for the following files:
 
@@ -49,7 +50,7 @@ Note that these tables feature truncated data sets! More information is availabl
 
 This data corresponds to the lowest Q-value hits for each protein in each TD report.
 
-```{r best-protein-hits, echo = FALSE, height = "500px"}
+```{r best-protein-hits, height = "500px"}
 
 out <-  NULL
 for (i in seq_along(filelist)) {
@@ -62,7 +63,7 @@ for (i in seq_along(filelist)) {
 
 ### Best Protein Hits - Counts by Filename {.tabset .tabset-fade}
 
-```{r, echo = FALSE}
+```{r}
 
 out <-  NULL
 for (i in seq_along(filelist)) {
@@ -75,7 +76,7 @@ for (i in seq_along(filelist)) {
 
 ### Best Protein Hits - Counts by Fraction {.tabset .tabset-fade}
 
-```{r, echo = FALSE}
+```{r}
 
 out <-  NULL
 for (i in seq_along(filelist)) {
@@ -88,7 +89,7 @@ for (i in seq_along(filelist)) {
 
 ### Best Protein Hits - Mass Distributions by Fraction, Heatmaps {.tabset .tabset-fade}
 
-```{r, echo = FALSE}
+```{r}
 
 out <-  NULL
 for (i in seq_along(filelist)) {
@@ -99,13 +100,15 @@ for (i in seq_along(filelist)) {
 
 `r paste(knitr::knit(text = out), collapse = '\n\n')`
 
-### All Protein Hits - Tables {.tabset .tabset-fade}
+### Best Protein Hits - Waffle Plots by Fraction {.tabset .tabset-fade}
 
-```{r all-protein-hits, echo = FALSE, height = "500px"}
+Scaling is faulty for plots not in the first tab - click "Autoscale" in the toolbar (top right) to fix.
+
+```{r}
 
 out <-  NULL
 for (i in seq_along(filelist)) {
-  out = c(out, knitr::knit_expand("extras/report_template/all-protein-hits.Rmd"))
+  out = c(out, knitr::knit_expand("extras/report_template/protein-waffle-byfraction.Rmd"))
 }
 
 ```
@@ -114,7 +117,7 @@ for (i in seq_along(filelist)) {
 
 ### All Protein Hits - Counts by Filename {.tabset .tabset-fade}
 
-```{r, echo = FALSE}
+```{r}
 
 out <-  NULL
 for (i in seq_along(filelist)) {
@@ -127,7 +130,7 @@ for (i in seq_along(filelist)) {
 
 ### All Protein Hits - Counts by Fraction {.tabset .tabset-fade}
 
-```{r, echo = FALSE}
+```{r}
 
 out <-  NULL
 for (i in seq_along(filelist)) {
@@ -162,7 +165,7 @@ Reduce(intersect, accessionlist) %>%
 
 ### Best Proteoform Hits {.tabset .tabset-fade}
 
-```{r best-proteoform-hits, echo = FALSE, height = "500px"}
+```{r best-proteoform-hits, height = "500px"}
 
 out <-  NULL
 for (i in seq_along(filelist)) {
@@ -175,7 +178,7 @@ for (i in seq_along(filelist)) {
 
 ### Best Proteoform Hits - Mass Distributions by Fraction, Heatmaps {.tabset .tabset-fade}
 
-```{r, echo = FALSE}
+```{r}
 
 out <-  NULL
 for (i in seq_along(filelist)) {
@@ -212,7 +215,8 @@ This is the session info for the R session which generated the results above.
 
 ```{r, results = "markup"}
 
-sesh <- fs::dir_info("output/session_info") %>% 
+sesh <- 
+  fs::dir_info("output/session_info") %>% 
   dplyr::filter(modification_time == max(.$modification_time)) %>% 
   .$path
 

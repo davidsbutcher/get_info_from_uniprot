@@ -57,7 +57,8 @@ results_safe <-
              .progress = TRUE
   )
 
-results_safe %>% walk(~(if (is.null(.x[["result"]]) == TRUE) message("NULL RESULT FOUND")) )
+results_safe %>%
+  walk(~(if (is.null(.x[["result"]]) == TRUE) stop("NULL RESULT FOUND")) )
 
 results <-
 results_safe %>%
@@ -71,6 +72,9 @@ UPdatabase <- results
 
 saveRDS(results, 
         file = glue("input/{taxon_number}_full_UniProt_database.rds"))
+
+feather::write_feather(results,
+                       glue("input/{taxon_number}_full_UniProt_database.feather"))
 
 rm(results)
 

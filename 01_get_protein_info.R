@@ -344,7 +344,7 @@ read_tdreport_full <- function(tdreport, fdr_cutoff = 0.01) {
 
   allproteinhits <- 
     left_join(hit, globalqualconf) %>% 
-    filter(GlobalQvalue <= 0.01) %>% 
+    filter(GlobalQvalue <= fdr_cutoff) %>% 
     left_join(datafile) %>%
     left_join(resultset) %>%
     left_join(bioproteoform) %>% 
@@ -932,6 +932,62 @@ getlocations_bydatafile <- function(resultslist) {
   return(counts)
 }
 
+getlocations_byfraction <- function(resultslist) {
+  
+  # This function gets counts of membrane, cytosolic, and "both" proteoforms based on
+  # GO terms pulled from UniProt for each unique accession number.
+  
+  counts <- tibble()
+  
+  for (i in seq_along(resultslist)) {
+
+    tempresults <- tibble()
+    
+    # For every proteoform in each output, get the count of proteoforms whose GO terms
+    # include "cytosol" OR "cytoplasm", "membrane", or BOTH. 
+    # WE DO NOT DIFFERENTIATE BETWEEN MEMBRANE TYPES!
+    tempresults <- 
+      resultslist[[i]] %>% 
+      mutate(tdreport_name = names(resultslist)[[i]]) %>% 
+      mutate(cytosol = str_detect(resultslist[[i]]$GO_subcell_loc,
+                                  c("cytosol|cytoplasm|ribosome"))) %>%
+      mutate(membrane = str_detect(resultslist[[i]]$GO_subcell_loc, 
+                                   c("membrane")) &
+               !str_detect(resultslist[[i]]$GO_subcell_loc, 
+                           c("membrane-bounded periplasmic space"))) %>% 
+      mutate(periplasm = str_detect(resultslist[[i]]$GO_subcell_loc,
+                                    c("periplasm"))) %>% 
+      mutate(NOTA = !str_detect(resultslist[[i]]$GO_subcell_loc,
+                                c("cytosol|cytoplasm|ribosome")) &
+               !str_detect(resultslist[[i]]$GO_subcell_loc, 
+                           c("membrane")) &
+               !str_detect(resultslist[[i]]$GO_subcell_loc, 
+                           c("membrane-bounded periplasmic space")) &
+               !str_detect(resultslist[[i]]$GO_subcell_loc,
+                           c("periplasm"))
+      )
+    
+    # 
+    
+    tempresultssummary <- 
+      tempresults %>%
+      group_by(tdreport_name, fraction) %>%
+      summarize(
+        protein_count = n(),
+        cytosol_count = sum(cytosol),
+        membrane_count = sum(membrane),
+        periplasm_count = sum(periplasm),
+        NOTA_count = sum(NOTA)
+      )
+
+    counts <- 
+      union_all(tempresultssummary, counts)
+    
+  }
+  
+  return(counts)
+}
+
 savePLBF <- function(input_tbbl, filename) {
   
   # Save proteinlist by filename
@@ -1054,13 +1110,15 @@ setwd(here())
 
 # Access UniProt ------------------------------------------------------------------------------
 
-if (glue("input/{taxon_number}_full_UniProt_database.rds") %>% 
+if (glue("input/{taxon_number}_full_UniProt_database.feather") %>% 
     file.exists == TRUE) {
   
   glue("Found UniProt database for taxon {taxon_number}, loading") %>% 
     message
   
-  UPdatabase <- readRDS(glue("input/{taxon_number}_full_UniProt_database.rds"))
+  UPdatabase <- feather::read_feather(
+    glue("input/{taxon_number}_full_UniProt_database.feather")
+    )
   
 } else {
   
@@ -1095,6 +1153,13 @@ names(results_protein) <- unlist(filelist) %>% basename()
 protein_counts_bydatafile <- 
   results_protein[1 : length(results_protein) - 1] %>% 
   getlocations_bydatafile()
+
+## This chunk will get protein location counts by FRACTION instead
+## of for each TDreport in the analysis or by datafile
+
+protein_counts_byfraction <- 
+  results_protein[1 : length(results_protein) - 1] %>% 
+  getlocations_byfraction()
 
 # Output --------------------------------------------------------------------------------------
 
@@ -1188,6 +1253,13 @@ if (tdreport_file == TRUE) {
   
   protein_counts_bydatafile %>% 
     writexl::write_xlsx(path = glue("countsbydatafile/{systime}_counts_bydatafile.xlsx"))
+  
+  # Save counts by fraction -------------------------------------------------
+  
+  if (dir.exists("countsbyfraction") == FALSE) dir.create("countsbyfraction")
+  
+  protein_counts_byfraction %>% 
+    writexl::write_xlsx(path = glue("countsbyfraction/{systime}_counts_byfraction.xlsx"))
   
 }
 
