@@ -1,0 +1,18 @@
+#### {{basename(filelist[[i]])}}\n\n
+
+  {{results_protein[[i]] %>%
+    dplyr::select(-c("SEQUENCE", "ORGANISM",
+                     "ORGANISM-ID", "FUNCTION",
+                     "SUBCELLULAR-LOCATIONS", "GO_term",
+                     "GO-ID", "ENTRY-NAME")) %>%
+    dplyr::select("UNIPROTKB", "PROTEIN-NAMES", everything()) %>% 
+                     mutate(filename = sub('(^[^_]+_[^_]+_[^_]+)_(.*)$', '\\1_ \\2', filename)) %>% 
+                     mutate(GlobalQvalue = formatC(GlobalQvalue, format = "e", digits = 3)) %>% 
+                     DT::datatable(options = list(autoWidth = TRUE,
+                                                  pageLength = 8,
+                                                  lengthMenu = c(8),
+                                                  pagingType = "full_numbers",
+                                                  columnDefs = list(list(className = 'dt-center'))),
+                                                  class = "compact")}}
+                     
+\n\n

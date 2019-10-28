@@ -1,0 +1,25 @@
+#### {{basename(filelist[[i]])}}\n\n
+
+  {{bin_size <- 1000
+  bins <-  seq.int(0, 200000, by = bin_size)
+  
+  plot2 <- 
+  results_protein[[i]] %>% 
+  select(c("ave_mass", "fraction")) %>% 
+  mutate(mass_bin = cut(ave_mass, breaks = bins, labels = FALSE)) %>%
+  group_by(fraction, mass_bin) %>% 
+  summarize(n()) %>%
+  mutate(mass_bin =  (mass_bin * bin_size) - bin_size) %>% 
+  rename("Protein Count" = `n()`) %>% 
+  ggplot(aes(mass_bin, fraction, fill = `Protein Count`)) +
+  geom_tile() +
+  scale_fill_viridis_c(option = "C", direction = -1) +
+  xlim(0, 100000) +
+  labs(x = "Mass Bin",
+       y = "Fraction") +
+  theme_minimal()
+
+
+  plotly::ggplotly(plot2)}}
+                     
+\n\n

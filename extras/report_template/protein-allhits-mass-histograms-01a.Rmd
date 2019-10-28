@@ -1,0 +1,17 @@
+#### {{basename(filelist[[i]])}}\n\n
+
+  {{plot <- proteinlistfull[[i]] %>% 
+    group_by(filename) %>% 
+    summarise("protein count" = n()) %>%
+    mutate(filename = sub('(^[^_]+_[^_]+_[^_]+)_(.*)$', '\\1_ \\2', filename)) %>% 
+    mutate(filename = stringr::str_trunc(filename, 40, side = "left")) %>%
+      ggplot() +
+    geom_col(aes(filename, `protein count`)) +
+    labs(x = "Filename",
+        y = "Protein Count") +
+    theme(axis.text.x = element_text(angle = 90)) +
+    scale_x_discrete(labels = function(x) stringr::str_wrap(x, width = 10))
+  
+  plotly::ggplotly(plot, height = 700)}}
+                     
+\n\n

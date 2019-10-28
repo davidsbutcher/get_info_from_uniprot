@@ -1,0 +1,13 @@
+#### {{basename(filelist[[i]])}}\n\n
+
+  {{plot <-
+    ggplot(data = results_protein[[i]], aes(ave_mass, fill = filename)) +
+    geom_histogram(binwidth = 1000, alpha = 0.5) +
+    labs(x = "Average Mass (Da)",
+         y = "Protein Count") +
+         xlim(0, 100000) +
+    theme_minimal()
+  
+  plotly::ggplotly(plot, height = 700)}}
+                     
+\n\n

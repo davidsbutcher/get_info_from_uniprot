@@ -1,0 +1,52 @@
+#### {{basename(filelist[[i]])}}\n\n
+
+  {{counts_byfrac_fltrd <- 
+  protein_counts_byfraction %>%
+  filter(tdreport_name == basename(filelist[[i]]))
+
+  fractionlist <- 
+  counts_byfrac_fltrd %>% 
+  .$fraction %>%
+  as.list
+
+  waffledata_protein_all_byfraction <- 
+  tibble(
+    Localization = factor(
+      c(
+        rep("Cytosolic", length(fractionlist)),
+        rep("Membrane", length(fractionlist)),
+        rep("Periplasmic", length(fractionlist)),
+        rep("NOTA", length(fractionlist))
+      )
+    ),
+    Count = c(counts_byfrac_fltrd$cytosol_count,
+              counts_byfrac_fltrd$membrane_count,
+              counts_byfrac_fltrd$periplasm_count,
+              counts_byfrac_fltrd$NOTA_count),
+    fraction = rep(counts_byfrac_fltrd$fraction, 4)
+  ) %>%
+  group_by(fraction, Localization) %>% 
+  summarize(Count)
+
+  output <- 
+  waffledata_protein_all_byfraction %>%
+  ggplot(aes(fill = Localization, values = Count)) +
+  waffle::stat_waffle(color = "white", size = 0.35, n_rows = 10,
+                      flip = TRUE, geom = "tile") +
+  facet_wrap(~fraction, nrow = 1, strip.position = "bottom") +
+  scale_x_discrete(expand=c(0,0)) +
+  scale_y_continuous(labels = function(x) x * 10, # this multiplier must be equal to n_rows above
+                     expand = c(0,0)) +
+  ggthemes::scale_fill_tableau(name=NULL) +
+  coord_equal() +
+  labs(
+    x = "Fraction Number",
+    y = "Protein Count"
+  ) +
+  theme_minimal() +
+  theme(panel.grid = element_blank(), axis.ticks.y = element_line()) +
+  guides(fill = guide_legend("Localization", reverse = TRUE))
+  
+  plotly::ggplotly(output, originalData = FALSE, tooltip = "Localization")}}
+              
+\n\n

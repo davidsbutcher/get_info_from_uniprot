@@ -1,0 +1,14 @@
+#### {{basename(filelist[[i]])}}\n\n
+
+  {{plot <- proteinlistfull[[i]] %>% 
+    group_by(fraction) %>% 
+    summarise("protein count" = n()) %>%
+      ggplot() +
+    geom_col(aes(fraction, `protein count`)) +
+    labs(x = "Fraction",
+        y = "Protein Count") +
+    theme(axis.text.x = element_text(angle = 90))
+    
+  plotly::ggplotly(plot, height = 700)}}
+                     
+\n\n

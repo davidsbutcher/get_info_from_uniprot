@@ -1,0 +1,15 @@
+#### {{basename(filelist[[i]])}}\n\n
+
+  {{
+  proteinlistfull[[i]] %>%
+    dplyr::select(-c("IsoformId", "ResultSetId", "DataFileId", "SEQUENCE")) %>%
+                     mutate(filename = sub('(^[^_]+_[^_]+_[^_]+)_(.*)$', '\\1_ \\2', filename)) %>% 
+                     mutate(GlobalQvalue = formatC(GlobalQvalue, format = "e", digits = 3)) %>%
+                     DT::datatable(options = list(autoWidth = TRUE,
+                                                  pageLength = 16,
+                                                  lengthMenu = c(16),
+                                                  pagingType = "full_numbers"),
+                                    class = "compact")
+                                    }}
+                     
+\n\n

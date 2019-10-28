@@ -1,0 +1,11 @@
+#### {{basename(filelist[[i]])}}\n\n
+
+  {{proteinlistbyfilename[[i]] %>%
+                     DT::datatable(options = list(autoWidth = TRUE,
+                                                  pageLength = 16,
+                                                  lengthMenu = c(16),
+                                                  pagingType = "full_numbers"),
+                                    class = "compact")
+                                    }}
+                     
+\n\n
