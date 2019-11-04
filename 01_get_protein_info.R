@@ -348,11 +348,14 @@ read_tdreport_full <- function(tdreport, fdr_cutoff = 0.01) {
     left_join(datafile) %>%
     left_join(resultset) %>%
     left_join(bioproteoform) %>% 
-    left_join(isoform) %>% 
-    select(-c("HitId", "ChemicalProteoformId")) %>%
+    left_join(isoform) %>%
+    group_by(HitId) %>%
+    filter(GlobalQvalue == min(GlobalQvalue)) %>% 
+    select(-c("ChemicalProteoformId")) %>%
     select("AccessionNumber", "filename",
            "GlobalQvalue", "ResultSetName", everything()) %>% 
-    drop_na()
+    drop_na() %>% 
+    dplyr::ungroup()
   
   # Close database connection and return output table
   
