@@ -263,6 +263,7 @@ read_tdreport_full <- function(tdreport, fdr_cutoff = 0.01) {
   # with the lowest Q value. 
   # Output is a tibble with all proteins hits below
   # FDR cutoff
+  # Output should match "Hit Report" from TDViewer
   
   message(glue("\nEstablishing connection to {basename(tdreport)}..."))
   
@@ -537,7 +538,8 @@ read_tdreport_byfilename <- function(tdreport, fdr_cutoff = 0.01) {
     left_join(datafile) %>%
     left_join(resultset) %>%
     left_join(bioproteoform) %>% 
-    left_join(isoform) %>% 
+    left_join(isoform) %>%
+    distinct() %>% 
     select(-c("HitId", "ChemicalProteoformId")) %>%
     select("AccessionNumber", "filename",
            "GlobalQvalue", "ResultSetName", everything()) %>% 
@@ -652,7 +654,8 @@ read_tdreport_byfraction <- function(tdreport, fdr_cutoff = 0.01) {
     left_join(datafile) %>%
     left_join(resultset) %>%
     left_join(bioproteoform) %>% 
-    left_join(isoform) %>% 
+    left_join(isoform) %>%
+    distinct() %>% 
     select(-c("HitId", "ChemicalProteoformId")) %>%
     select("AccessionNumber", "filename",
            "GlobalQvalue", "ResultSetName", everything()) %>% 
@@ -680,7 +683,8 @@ read_tdreport_byfraction <- function(tdreport, fdr_cutoff = 0.01) {
   return(output)
   
 }
-
+ 
+ 
 getuniprotinfo <- function(tbl, taxon = NULL, tdreport = TRUE) {
   
   message("Retrieving info from UniProt...")
@@ -1171,18 +1175,24 @@ if (length(unique(extension)) > 1) {
   
 } else if (extension[[1]] == "tdReport") {
   
-  message("Reading protein data from tdReport...")
+  message("Reading protein data from tdReport...\n")
   proteinlist <- filelist %>% future_map(read_tdreport2, fdr_cutoff = fdr)
   
-  message("Reading full protein data from tdReport...")
+  message("Reading full protein data from tdReport...\n")
   proteinlistfull <- filelist %>% 
     future_map(read_tdreport_full, fdr_cutoff = fdr)
   
-  message("Reading protein data by file name from tdReport...")
+  message("Reading full protein data with spectra from tdReport...\n")
+  proteinlistwithspectra <- filelist %>% 
+    future_map2(proteinlistfull,
+                read_tdreport_withspectra,
+               fdr_cutoff = fdr)
+  
+  message("Reading protein data by file name from tdReport...\n")
   proteinlistbyfilename <- filelist %>% 
     future_map(read_tdreport_byfilename, fdr_cutoff = fdr)
   
-  message("Attempting to read protein data by fraction from tdReport...")
+  message("Attempting to read protein data by fraction from tdReport...\n")
   proteinlistbyfraction <- filelist %>% 
     future_map(read_tdreport_byfraction, fdr_cutoff = fdr)
 
