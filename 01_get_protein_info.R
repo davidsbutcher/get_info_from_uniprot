@@ -367,6 +367,87 @@ read_tdreport_full <- function(tdreport, fdr_cutoff = 0.01) {
   
 }
 
+read_tdreport_withspectra <- function(tdreport, allproteinhitslist,
+                                      fdr_cutoff = 0.01) {
+  
+  # This function will return ALL hits above Q value threshold, not only the one
+  # with the lowest Q value. 
+  # Output is a tibble with all proteins hits below
+  # FDR cutoff
+  
+  message(glue("\nEstablishing connection to {basename(tdreport)}..."))
+  
+  #Establish database connection. Keep trying until it works!
+  
+  safe_dbConnect <- safely(dbConnect)
+  
+  safecon <- safe_dbConnect(RSQLite::SQLite(), ":memory:", dbname = tdreport)
+  
+  if (is.null(safecon[["result"]]) == TRUE) message("Connection failed, trying again!")
+  
+  iteration_num <- 1
+  
+  while (is.null(safecon[["result"]]) == TRUE & iteration_num < 500) {
+    
+    iteration_num <- iteration_num + 1
+    
+    message(glue("\nTrying to establish database connection, attempt {iteration_num}"))
+    safecon <- safe_dbConnect(RSQLite::SQLite(), ":memory:",
+                              dbname = tdreport,
+                              synchronous = NULL)
+    
+  }
+  
+  if (is.null(safecon[["result"]]) == TRUE) stop("Failed to connect using SQLite!")
+  
+  con <- safecon[["result"]]
+  
+  # Get relevant tables from TDReport using SQL
+  
+  {
+    
+    hittospectrum <- con %>%
+      RSQLite::dbGetQuery("SELECT SpectrumId, HitId
+                        FROM HitToSpectrum") %>%
+      as_tibble()
+    
+    spectrum <- con %>%
+      RSQLite::dbGetQuery("SELECT Id, FragmentationMethodId, Level
+                          FROM Spectrum") %>%
+      as_tibble() %>% 
+      rename("MSLevel" = Level) %>% 
+      rename("SpectrumId" = Id)
+    
+    scanheadertospectrum <- con %>%
+      RSQLite::dbGetQuery("SELECT ScanHeaderId, SpectrumId
+                          FROM ScanHeaderToSpectrum") %>%
+      as_tibble()
+    
+    scanheader <- con %>%
+      RSQLite::dbGetQuery("SELECT Id, ScanIndex,
+                          FragmentationMz, FragmentationEnergy
+                          FROM ScanHeader") %>%
+      as_tibble() %>% 
+      rename("ScanHeaderId" = Id)
+
+    
+  }
+  
+  hitswithspectra <-
+    allproteinhitslist %>% 
+    left_join(hittospectrum) %>% 
+    left_join(spectrum) %>%
+    left_join(scanheadertospectrum) %>%
+    left_join(scanheader)
+
+  dbDisconnect(con)
+  
+  message("read_tdreport_withspectra Finished!")
+  
+  return(hitswithspectra)
+  
+}
+
 read_tdreport_byfilename <- function(tdreport, fdr_cutoff = 0.01) {
   
   # This function will return ALL hits above Q value threshold, not only the one
