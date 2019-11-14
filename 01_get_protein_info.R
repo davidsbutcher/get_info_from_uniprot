@@ -437,6 +437,127 @@ read_tdreport_full <- function(tdreport, fdr_cutoff = 0.01) {
   
 }
 
+read_tdreport_filter <- function(tdreport, fdr_cutoff = 0.01) {
+  
+  # This function is intended to replicate the filtering done by TDviewer in
+  # an automated fashion (by fraction)
+  
+  message(glue("\nEstablishing connection to {basename(tdreport)}..."))
+  
+  #Establish database connection. Keep trying until it works!
+  
+  safe_dbConnect <- safely(dbConnect)
+  
+  safecon <- safe_dbConnect(RSQLite::SQLite(), ":memory:", dbname = tdreport)
+  
+  if (is.null(safecon[["result"]]) == TRUE) message("Connection failed, trying again!")
+  
+  iteration_num <- 1
+  
+  while (is.null(safecon[["result"]]) == TRUE & iteration_num < 500) {
+    
+    iteration_num <- iteration_num + 1
+    
+    message(glue("\nTrying to establish database connection, attempt {iteration_num}"))
+    safecon <- safe_dbConnect(RSQLite::SQLite(), ":memory:",
+                              dbname = tdreport,
+                              synchronous = NULL)
+    
+  }
+  
+  if (is.null(safecon[["result"]]) == TRUE) stop("Failed to connect using SQLite!")
+  
+  con <- safecon[["result"]]
+  
+  # Get relevant tables from TDReport using SQL
+  
+  {
+    
+    globalqualconf <- con %>%
+      RSQLite::dbGetQuery("SELECT GlobalQvalue, HitId 
+                        FROM GlobalQualitativeConfidence") %>%
+      as_tibble()
+    
+    datafile <- con %>%
+      RSQLite::dbGetQuery("SELECT Id, Name 
+                        FROM DataFile") %>%
+      as_tibble() %>% 
+      dplyr::rename("DataFileId" = Id) %>% 
+      dplyr::rename("filename" = Name)
+    
+    resultset <- con %>%
+      RSQLite::dbGetQuery("SELECT Id, Name 
+                        FROM ResultSet") %>%
+      as_tibble() %>% 
+      dplyr::rename("ResultSetId" = Id) %>% 
+      dplyr::rename("ResultSetName" = Name)
+    
+    isoform <- con %>%
+      RSQLite::dbGetQuery("SELECT Id, AccessionNumber, Sequence 
+                        FROM Isoform") %>%
+      as_tibble() %>% 
+      dplyr::rename("IsoformId" = Id) %>% 
+      dplyr::rename("SEQUENCE" = Sequence)
+    
+    
+    bioproteoform <- con %>%
+      RSQLite::dbGetQuery("SELECT IsoformId, ChemicalProteoformId
+                        FROM BiologicalProteoform") %>%
+      as_tibble()
+    
+    hit <- con %>%
+      RSQLite::dbGetQuery("SELECT Id, ResultSetId,
+                        DataFileId, ChemicalProteoformId,
+                        ObservedPrecursorMass
+                        FROM Hit") %>%
+      as_tibble %>% 
+      dplyr::rename("HitId" = Id)
+    
+    
+    entry <- con %>%
+      RSQLite::dbGetQuery("SELECT Id, AccessionNumber
+                        FROM Entry") %>%
+      as_tibble() %>% 
+      dplyr::rename("EntryId" = Id)
+    
+  }
+  
+  fraction_filtered_hits <- 
+    left_join(hit, globalqualconf) %>%
+    left_join(datafile) %>%
+    addfraction() %>% 
+    filter(GlobalQvalue <= fdr_cutoff) %>%
+    left_join(resultset) %>%
+    left_join(bioproteoform) %>% 
+    left_join(isoform) %>%
+    group_by(fraction, AccessionNumber) %>% 
+    filter(GlobalQvalue == min(GlobalQvalue)) %>% 
+    arrange(fraction) %>%
+    select(-c("ChemicalProteoformId")) %>%
+    select("AccessionNumber", "filename",
+           "GlobalQvalue", "ResultSetName", everything()) %>% 
+    drop_na() %>% 
+    dplyr::ungroup()
+  
+  output <- 
+    fraction_filtered_hits %>% 
+    dplyr::select(c("fraction", "AccessionNumber")) %>% 
+    distinct() %>% 
+    pivot_wider(names_from = "fraction",
+                values_from = "AccessionNumber",
+                values_fn = list(AccessionNumber = list)) %>%
+    dplyr::rename_all(function(x) paste0("Frac_", x))
+    
+  # Close database connection and return output table
+  
+  dbDisconnect(con)
+  
+  message("read_tdreport_full Finished!")
+  
+  return(output)
+  
+}
+
 read_tdreport_withspectra <- function(tdreport, allproteinhitslist,
                                       fdr_cutoff = 0.01) {
   
