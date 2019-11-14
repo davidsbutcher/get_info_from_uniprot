@@ -218,18 +218,18 @@ read_tdreport2 <- function(tdreport, fdr_cutoff = 0.01) {
       dplyr::rename("IsoformId" = Id) %>% 
       dplyr::rename("SEQUENCE" = Sequence)
     
-    
     # bioproteoform <- con %>%
     #   RSQLite::dbGetQuery("SELECT IsoformId, ChemicalProteoformId
     #                     FROM BiologicalProteoform") %>%
     #   as_tibble
     
     hit <- con %>%
-      RSQLite::dbGetQuery("SELECT Id, ResultSetId, DataFileId, ChemicalProteoformId
+      RSQLite::dbGetQuery("SELECT Id, ResultSetId,
+                        DataFileId, ChemicalProteoformId,
+                        ObservedPrecursorMass
                         FROM Hit") %>%
       as_tibble %>% 
       dplyr::rename("HitId" = Id)
-    
     
     # entry <- con %>%
     #   RSQLite::dbGetQuery("SELECT Id, AccessionNumber
@@ -245,7 +245,8 @@ read_tdreport2 <- function(tdreport, fdr_cutoff = 0.01) {
     left_join(hit) %>%
     left_join(resultset) %>% 
     left_join(datafile) %>%
-    select("AccessionNumber", "GlobalQvalue", "filename")
+    select("AccessionNumber", "GlobalQvalue",
+           "ObservedPrecursorMass", "filename")
 
   # Close database connection and return output table
   
@@ -329,9 +330,11 @@ read_tdreport_full <- function(tdreport, fdr_cutoff = 0.01) {
       as_tibble()
     
     hit <- con %>%
-      RSQLite::dbGetQuery("SELECT Id, ResultSetId, DataFileId, ChemicalProteoformId
+      RSQLite::dbGetQuery("SELECT Id, ResultSetId,
+                        DataFileId, ChemicalProteoformId,
+                        ObservedPrecursorMass
                         FROM Hit") %>%
-      as_tibble() %>% 
+      as_tibble %>% 
       dplyr::rename("HitId" = Id)
     
     
@@ -634,7 +637,8 @@ read_tdreport_byfraction <- function(tdreport, fdr_cutoff = 0.01) {
       as_tibble()
     
     hit <- con %>%
-      RSQLite::dbGetQuery("SELECT Id, ResultSetId, DataFileId, ChemicalProteoformId
+      RSQLite::dbGetQuery("SELECT Id, ResultSetId, DataFileId,
+                        ChemicalProteoformId, ObservedPrecursorMass
                         FROM Hit") %>%
       as_tibble() %>% 
       dplyr::rename("HitId" = Id)
@@ -665,7 +669,7 @@ read_tdreport_byfraction <- function(tdreport, fdr_cutoff = 0.01) {
   proteinhitsbyfraction <- 
     allproteinhits %>% 
     dplyr::select(-c("DataFileId", "IsoformId", "GlobalQvalue", "filename",
-                     "ResultSetName", "ResultSetId", "SEQUENCE")) %>% 
+                     "ResultSetName", "ResultSetId", "SEQUENCE", "ObservedPrecursorMass")) %>% 
     pivot_wider(names_from = "fraction",
                 values_from = "AccessionNumber",
                 values_fn = list(AccessionNumber = list)) %>%
@@ -820,11 +824,11 @@ addfraction <- function(tbl) {
     mutate(
       fraction = case_when(
         stringr::str_detect(filename,
-                            "(?i)(?<=gf|peppi|frac|fraction|f|f_)[0-9]{1,2}") == TRUE ~
+                            "(?i)(?<=gf|gf_|peppi|frac|fraction|f|f_)[0-9]{1,2}") == TRUE ~
           stringr::str_extract(filename,
-                               "(?i)(?<=gf|peppi|frac|fraction|f|f_)[0-9]{1,2}"),
+                               "(?i)(?<=gf|gf_|peppi|frac|fraction|f|f_)[0-9]{1,2}"),
         stringr::str_detect(filename,
-                            "(?i)(?<=gf|peppi|frac|fraction|f|f_)[0-9]{1,2}") == FALSE ~ "NA"
+                            "(?i)(?<=gf|gf_|peppi|frac|fraction|f|f_)[0-9]{1,2}") == FALSE ~ "NA"
       )
     )
   
