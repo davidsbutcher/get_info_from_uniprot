@@ -26,15 +26,16 @@ library(progress)
 library(tictoc)
 library(glue)
 library(RPushbullet)
+library(ggplot2)
 library(ggpubr)
 library(UniProt.ws)
 library(magrittr)
 library(tibble)
-library(dplyr)
 library(purrr)
 library(stringr)
 library(readr)
 library(tidyr)
+library(dplyr)
 
 # Initialize Parameters -----------------------------------------------------------------------
 
@@ -42,19 +43,22 @@ setwd(here())
 
 # Add a directory with files to scan. By default all subdirectories
 # will be checked UNLESS the directory has "deprecated" in its name.
-# MAKE SURE TO ADD THE FINAL FORWARD SLASH for directories
+# MAKE SURE TO ADD THE FINAL FORWARD SLASH for directory
+#
 # All input files must be csv, xlsx, or tdReport files.
-# You can also add the full path to a single file (including extension).
+# 
+# filedir should be the directory containing the TDreports. Can be 
+# several levels above, doesn't matter.
+#
+# filename should be one or more complete filenames found somewhere
+# in the file directory
 
-filedir <- 
-  c("Z:/ICR/David Butcher/TDReports/EcoliMG1655/
-  20190916_EcoliMG1655_GELFrEE_red_alk/
-    20190916_EcoliMG1655WCL_M9-O+L-20190515_2runs_CAMSEARCH.tdReport",
-    "Z:/ICR/David Butcher/TDReports/EcoliMG1655/
-  201909_EcoliMG1655_PEPPI_M9/
-  20190907_EcoliMG1655_PEPPI_M9_F01-F09_CAMsearch.tdReport") %>% 
-  str_replace_all("\\n *", "")
+filedir <-
+  c("Z:/ICR/David Butcher/TDReports/EcoliMG1655/")
 
+filename <- 
+  c("20191121_EcoliMG1655_PEPPI_M9-M-20190515_F01-09_2run_CAMsearch.tdReport")
+  
 # Specify false discovery rate to use for rejection of hits (as decimal)
 # when using a tdReport as input - 0.01 is 1% FDR
 
@@ -68,7 +72,7 @@ taxon_number <- 83333
 
 # Should PushBullet be used to notify when the script is finished?
 
-use_PB <- TRUE
+use_PB <- FALSE
 
 # Should a summary be generated for this analysis?
 
@@ -100,29 +104,50 @@ kickout <- function(list) {
   return(list)
 }
 
-# Load data ---------------------------------------------------------------
+# Load Data ---------------------------------------------------------------
 
 # Data files must
 # be in csv, xlsx, or tdReport format and have a column of UniProt IDs whose 
 # name includes the word "accession" somewhere. Case doesn't matter
 # but spelling does.
 
-if (file.exists(filedir) == TRUE) {
-  
-  filelist <- filedir %>% as.list() %>% kickout
-  filedir <- filedir %>% dirname()
-  
-  names(filelist) <- seq(1, length(filelist))
-  
-} else {
-  
-  filelist <- filedir %>%
-    list.files(recursive = T, include.dirs = T, full.names = T) %>%
-    as.list %>% kickout
-  
-  names(filelist) <- seq(1, length(filelist))
-  
+{
+# if (file.exists(filedir) == TRUE) {
+#   
+#   filelist <- filedir %>% as.list() %>% kickout
+#   filedir <- filedir %>% dirname()
+#   
+#   names(filelist) <- seq(1, length(filelist))
+#   
+# } else {
+#   
+#   filelist <- filedir %>%
+#     list.files(recursive = T, include.dirs = T, full.names = T) %>%
+#     as.list %>% kickout
+#   
+#   names(filelist) <- seq(1, length(filelist))
+#   
+# }
 }
+
+filesindir <- 
+  fs::dir_ls(filedir, recurse = TRUE, type = "file", 
+             regexp = c("[.]tdReport$")) %>% 
+  purrr::as_vector()
+
+if (map(filename, 
+        ~str_detect(filesindir, .x)) %>% 
+    map(any) %>%
+    as_vector() %>% 
+    all() == FALSE) stop("One or more input files not found")
+
+filelist <- 
+  filename %>% 
+  map_chr(~str_subset(filesindir, .x)) %>% 
+  as.list() %>% 
+  kickout()
+
+names(filelist) <- seq(1, length(filelist))
 
 # Need to run this command for furrr. If 10 is too many sessions for your
 # system try 5. If running <10 files, change workers to be equal to number
@@ -203,7 +228,7 @@ if (make_report == TRUE) {
 totaltime <- 
   capture.output(toc()) %>%
   str_extract("[0-9]+") %>%
-  as.numeric %>%
+  as.numeric() %>%
   `/`(60) %>%
   round(digits = 2)
 
@@ -219,6 +244,18 @@ pbPost("note", "R Analysis Finished",
   
 }
 
+# Save Workspace ------------------------------------------------------------------------------
+
+# Just in case you want to see an image from a particular run of results
+
+if (dir.exists("output/workspace_images") == FALSE) dir.create("output/workspace_images")
+
+glue("output/workspace_images/{systime}_workspace_image.RData") %>% 
+  save.image()
+
+
+# Save Session Info -------------------------------------------------------
+
 # Session info for every run is saved to a txt file in the 
 # output directory, in case 
 
@@ -227,6 +264,9 @@ if(dir.exists("output/session_info") == FALSE) dir.create("output/session_info")
 sessioninfo::session_info() %>%
   capture.output %>%
   writeLines(glue("output/session_info/{systime}_sessionInfo.txt"))
+
+
+# Disable Extra Workers ---------------------------------------------------
 
 # Close the extra R sessions used by future/furrr
 
