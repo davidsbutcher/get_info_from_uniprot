@@ -61,7 +61,7 @@ results_safe %>%
   walk(~(if (is.null(.x[["result"]]) == TRUE) stop("NULL RESULT FOUND")) )
 
 results <-
-results_safe %>%
+  results_safe %>%
   map(~(.x[["result"]])) %>%
   reduce(union_all) %>%
   as_tibble
