@@ -4,6 +4,7 @@
 .Ruserdata
 *.Rproj
 04_generate_report_cache/
+testers/
 packrat/lib*/
 deprecated
 unused_input
