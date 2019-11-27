@@ -141,6 +141,61 @@ for (i in seq_along(filelist)) {
 
 `r paste(knitr::knit(text = out), collapse = '\n\n')`
 
+### All Protein Hits - Distribution of Q values by fraction {.tabset .tabset-fade}
+
+```{r}
+
+out <-  NULL
+for (i in seq_along(filelist)) {
+  out = c(out, knitr::knit_expand("extras/report_template/protein-allhits-Qvalues.Rmd"))
+}
+
+```
+
+`r paste(knitr::knit(text = out), collapse = '\n\n')`
+
+### All Protein Hits - Hit counts by result set and intact monoisotopic mass {.tabset .tabset-fade}
+
+```{r}
+
+get_spectrum_summary <- function(allhits, filename) {
+   
+   allhits %>% 
+      group_by(AccessionNumber, ResultSet) %>% 
+      summarize(count = n(),
+                averageMonoisotopicMass = mean(MonoisotopicMass),
+                averageObservedPrecursorMass = mean(ObservedPrecursorMass),
+                rangeObservedPrecursorMass = diff(range(ObservedPrecursorMass))) %>%
+      mutate(raw_file_name = filename)
+   
+}
+
+
+allhits_summary <- 
+  map2(proteinlistfull, filelist, get_spectrum_summary) %>% 
+  reduce(union_all) %>% 
+  select(raw_file_name, everything()) %>% 
+  mutate(raw_file_name = basename(raw_file_name) %>% file_path_sans_ext())
+
+plot <- 
+  allhits_summary %>%
+  # filter(ResultSet == "Tight Absolute Mass"|
+  #           ResultSet == "BioMarker") %>% 
+  ggplot(aes(x = averageMonoisotopicMass,
+             fill = ResultSet)) +
+  geom_histogram(binwidth = 1000, 
+                 position = "identity",
+                 aes(alpha = 0.9)) +
+  facet_wrap(~ raw_file_name, ncol = 1) +
+  theme(text = element_text(size = 12)) +
+  guides(alpha = FALSE) +
+  labs(x = "Intact Monoisotopic Mass (Da)",
+       y = "Hit Count")
+
+plotly::ggplotly(plot, height = 700, width = 1000)
+
+```
+
 ### Common Proteins
 
 The following proteins were found in all of the TD reports analyzed. They are sorted by UniProt accession number.
