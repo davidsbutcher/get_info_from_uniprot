@@ -366,6 +366,77 @@ read_tdreport2 <- function(tdreport, proteinlistin, fdr_cutoff = 0.01) {
   return(output)
 }
 
+read_tdreport_proteoform <- function(tdreport, fdr_cutoff = 0.01) {
+  
+  #Establish database connection. Keep trying until it works!
+  
+  safe_dbConnect <- safely(dbConnect)
+  
+  safecon <- safe_dbConnect(RSQLite::SQLite(), ":memory:",
+                            dbname = tdreport,
+                            synchronous = NULL)
+  
+  iteration_num <- 1
+  
+  while (is.null(safecon[["result"]]) == TRUE & iteration_num < 500) {
+    
+    print(glue("\nTrying to establish database connection, attempt {iteration_num}"))
+    safecon <- safe_dbConnect(RSQLite::SQLite(), ":memory:",
+                              dbname = tdreport,
+                              synchronous = NULL)
+    
+  }
+  
+  if (is.null(safecon[["result"]]) == TRUE) {
+    
+    stop("read_tdreport2 could not connect to TDreport")
+    
+  } else {
+    
+    message("Connection succeeded")
+    con <- safecon[["result"]]
+    
+  }
+  
+  protein_accession <- 
+    tbl(con, "Isoform") %>% 
+    left_join(tbl(con, "GlobalQualitativeConfidence"),
+              by = c("Id" = "ExternalId")) %>%
+    filter(GlobalQvalue <= fdr_cutoff) %>% 
+    collect() %>% 
+    .$AccessionNumber
+  
+  proteoform_results <- 
+    tbl(con, "BiologicalProteoform") %>% 
+    left_join(tbl(con, "GlobalQualitativeConfidence"),
+              by = c("Id" = "ExternalId")) %>%
+    rename("ExternalId" = Id.x) %>% 
+    left_join(tbl(con, "ChemicalProteoform"),
+              by = c("ChemicalProteoformId" = "Id")) %>%
+    rename("ProteoformSequence" = Sequence) %>% 
+    filter(GlobalQvalue <= fdr_cutoff) %>%
+    left_join(tbl(con, "Isoform"),
+              by = c("IsoformId" = "Id")) %>%
+    rename("IntactSequence" = Sequence) %>% 
+    left_join(tbl(con, "Hit"),
+              by = c("HitId" = "Id")) %>%
+    left_join(tbl(con, "ResultSet"),
+              by = c("ResultSetId" = "Id")) %>%
+    left_join(tbl(con, "DataFile"),
+              by = c("DataFileId" = "Id")) %>% 
+    collect() %>%
+    filter(AccessionNumber %in% protein_accession) %>% 
+    rename("ResultSet" = Name.x, "filename" = Name.y,
+           "ChemicalProteoformId" = ChemicalProteoformId.x) %>% 
+    select(-Description.x, -Id.y, -Description.y, -ChemicalProteoformId.y,
+           -Description, -FilePath)
+  
+  dbDisconnect(con)
+  
+  return(proteoform_results)
+  
+}
+
 getuniprotinfo <- function(tbl, taxon = NULL, tdreport = TRUE) {
   
   # Find column in the input tibble which has "accession"
@@ -471,7 +542,7 @@ getuniprotinfo2 <- function(tbl, filelistnum, tdreport = TRUE) {
       dplyr::select(tbl, c(!!accession_name, "ProteoformRecordNum",
                            "GlobalQvalue", "filename",
                            "MonoisotopicMass", "AverageMass")) %>% 
-      rename("UNIPROTKB" = AccessionNumber)
+      dplyr::rename("UNIPROTKB" = AccessionNumber)
 
     
   } else {
@@ -484,8 +555,8 @@ getuniprotinfo2 <- function(tbl, filelistnum, tdreport = TRUE) {
     left_join(dplyr::select(results_protein[[filelistnum]],
                             -c(GlobalQvalue, 
                                filename,
-                               monoiso_mass,
-                               ave_mass,
+                               MonoisotopicMass,
+                               AverageMass,
                                fraction)), by = "UNIPROTKB")
   
   
@@ -499,8 +570,8 @@ addmasses <- function(tbl) {
   # average and monoisotopic masses based on protein sequence.
   # These values diverge from those in the TDreport by <0.00005 Da.
   
-  mutate(tbl, monoiso_mass = mw(tbl$SEQUENCE, monoisotopic = TRUE),
-         ave_mass = mw(tbl$SEQUENCE, monoisotopic = FALSE))
+  mutate(tbl, MonoisotopicMass = mw(tbl$SEQUENCE, monoisotopic = TRUE),
+         AverageMass = mw(tbl$SEQUENCE, monoisotopic = FALSE))
   
 }
 
@@ -680,7 +751,7 @@ if (length(unique(extension)) > 1) {
   
   message("Reading proteoform data from tdReport...")
   
-  proteoformlist <- future_map2(filelist, proteinlist, read_tdreport2,
+  proteoformlist <- future_map(filelist, read_tdreport_proteoform,
                                 fdr_cutoff = fdr)
   
   tdreport_file <- TRUE
@@ -739,7 +810,7 @@ results_proteoform[[length(results_proteoform)+1]] <- getlocations_proteoform(re
 # An xlsx file with sheets corresponding to files in /data is written to
 # the project directory
 
-resultsname <- glue("{systime}_proteoform_results.xlsx")
+resultsname <- glue("proteoform_results/{systime}_proteoform_results.xlsx")
 resultsobjectname <- glue("{systime}_proteoform_results.rds")
 
 names(results_proteoform) <- unlist(filelist)
@@ -753,6 +824,8 @@ for (i in seq_along(names(results_proteoform))) {
 }
 
 setwd(here("output"))
+
+if (dir.exists("proteoform_results") == FALSE) dir.create("proteoform_results")
 
 results_proteoform %>%
   writexl::write_xlsx(path = resultsname)
