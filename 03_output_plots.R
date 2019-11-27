@@ -138,7 +138,11 @@ for (i in head(seq_along(results_protein), - 1)) {
       labs(x = "Average Mass (Da)",
            y = "Proteoform Count",
            title = basename(names(proteoformlist)[i])) +
-      xlim(0, 100000) +
+      xlim(0,
+           plyr::round_any(
+             max(results_protein[[i]]$ObservedPrecursorMass),
+             10000, f = ceiling)
+      ) +
       theme_minimal()
     
     ##### Save proteoform mass histograms
@@ -212,11 +216,3 @@ for (i in head(seq_along(results_protein), - 1)) {
   
 }
 
-# Save Workspace ------------------------------------------------------------------------------
-
-# Just in case you want to see an image from a particular run of results
-
-if (dir.exists("output/workspace_images") == FALSE) dir.create("output/workspace_images")
-
-glue("output/workspace_images/{systime}_workspace_image.RData") %>% 
-  save.image()
