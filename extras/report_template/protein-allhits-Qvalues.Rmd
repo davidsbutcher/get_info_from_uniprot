@@ -1,0 +1,29 @@
+#### {{basename(filelist[[i]])}}\n\n
+
+  {{
+plot <-  
+  ggplot(proteinlistfull[[i]], aes(ObservedPrecursorMass/1000,
+                                -log10(GlobalQvalue))) +
+  geom_point(aes(color = fraction)) +
+  facet_wrap(~ fraction, nrow = 9,
+             strip.position = "right",
+             scales = "fixed") +
+  theme_minimal() +
+  labs(x = "Precursor Mass (kDa)",
+       y = "-Log10(Q value)",
+       color = element_blank(),
+       size = element_blank()) +
+  guides(color = "none",
+         size = "none") +
+  theme(axis.text = element_text(size = 14),
+        panel.grid.major.x = element_blank(),
+        panel.spacing.y = unit(c(2), units = "mm"),
+        panel.background = element_rect("light gray", "dark gray"),
+        strip.text = element_text(size = 14),
+        text = element_text(size = 16)) +
+  scale_colour_viridis_d(end = 0.75)
+  
+  plotly::ggplotly(plot, height = 1400)
+                                    }}
+                     
+\n\n

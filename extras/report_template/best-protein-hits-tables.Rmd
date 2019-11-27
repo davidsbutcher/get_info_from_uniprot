@@ -6,7 +6,8 @@
                      "SUBCELLULAR-LOCATIONS", "GO_term",
                      "GO-ID", "ENTRY-NAME")) %>%
     dplyr::select("UNIPROTKB", "PROTEIN-NAMES", everything()) %>% 
-                     mutate(filename = sub('(^[^_]+_[^_]+_[^_]+)_(.*)$', '\\1_ \\2', filename)) %>% 
+                     mutate(filename = sub('(^[^_]+_[^_]+_[^_]+)_(.*)$', '\\1_ \\2', filename)) %>%
+                     mutate(`PROTEIN-NAMES` = stringr::str_trunc(`PROTEIN-NAMES`, 80, "right", ellipsis = "...")) %>% 
                      mutate(GlobalQvalue = formatC(GlobalQvalue, format = "e", digits = 3)) %>% 
                      DT::datatable(options = list(autoWidth = TRUE,
                                                   pageLength = 8,
@@ -16,3 +17,4 @@
                                                   class = "compact")}}
                      
 \n\n
+

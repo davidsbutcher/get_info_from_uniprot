@@ -1,25 +1,36 @@
 #### {{basename(filelist[[i]])}}\n\n
 
-  {{bin_size <- 1000
-  bins <-  seq.int(0, 200000, by = bin_size)
-  
-  plot <- 
-  results_proteoform[[i]] %>% 
-  select(c("AverageMass", "fraction")) %>% 
-  mutate(mass_bin = cut(AverageMass, breaks = bins, labels = FALSE)) %>%
-  group_by(fraction, mass_bin) %>% 
-  summarize(n()) %>%
-  mutate(mass_bin =  (mass_bin * bin_size) - bin_size) %>% 
-  rename("Proteoform Count" = `n()`) %>% 
-  ggplot(aes(mass_bin, fraction, fill = `Proteoform Count`)) +
-  geom_tile() +
-  scale_fill_viridis_c(option = "C", direction = -1) +
-  xlim(0, 100000) +
-  labs(x = "Mass Bin",
-       y = "Fraction") +
-  theme_minimal()
+  {{bin_size <- 1000   # SPECIFY SIZE for heatmap mass bins
+    bins <-  seq.int(0, 200000, by = bin_size)
+    
+    proteoform_heatmap_data <- 
+      results_proteoform[[i]] %>% 
+      select(c("ObservedPrecursorMass", "fraction")) %>% 
+      mutate(mass_bin = cut(ObservedPrecursorMass, breaks = bins, labels = FALSE)) %>%
+      group_by(fraction, mass_bin) %>% 
+      summarize(n()) %>%
+      mutate(mass_bin =  (mass_bin * bin_size) - bin_size) %>% 
+      rename("Proteoform Count" = `n()`) %>%
+      ungroup() %>% 
+      mutate(fraction = forcats::as_factor(fraction))
+    
+    proteoform_heatmap <- 
+      proteoform_heatmap_data %>% 
+      ggplot(aes(mass_bin, fraction,
+                 fill = `Proteoform Count`)) +
+      geom_tile() +
+      scale_fill_viridis_c(option = "C", direction = -1) +
+      xlim(0,
+           plyr::round_any(
+             max(proteoform_heatmap_data$mass_bin),
+             10000, f = ceiling)
+      ) +
+      scale_y_discrete(limits = rev(levels(proteoform_heatmap_data$fraction))) +
+      labs(x = "Mass Bin (Da)",
+           y = "Fraction") +
+      theme_minimal() +
+      theme(text = element_text(size=18))
 
-
-plotly::ggplotly(plot)}}
+    plotly::ggplotly(proteoform_heatmap)}}
                      
 \n\n
