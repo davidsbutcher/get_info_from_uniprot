@@ -245,7 +245,7 @@ read_tdreport2 <- function(tdreport, fdr_cutoff = 0.01) {
     left_join(hit) %>%
     left_join(resultset) %>% 
     left_join(datafile) %>%
-    select("AccessionNumber", "GlobalQvalue",
+    dplyr::select("AccessionNumber", "GlobalQvalue",
            "ObservedPrecursorMass", "filename")
 
   # Close database connection and return output table
@@ -258,14 +258,14 @@ read_tdreport2 <- function(tdreport, fdr_cutoff = 0.01) {
   
 }
 
-read_tdreport3 <- function(tdreport, fdr_cutoff = 0.01) {
+read_tdreport_protein <- function(tdreport, fdr_cutoff = 0.01) {
   
-  # Uses dbplyr instead of dplyr. Not faster than read_tdreport2
+  # Uses dbplyr instead of dplyr. Not much faster than read_tdreport2, possibly
+  # has less memory usage
   
   message(glue("\nEstablishing connection to {basename(tdreport)}..."))
   
   # Establish database connection. Keep trying until it works!
-  #
   
   safe_dbConnect <- safely(dbConnect)
   
@@ -288,16 +288,15 @@ read_tdreport3 <- function(tdreport, fdr_cutoff = 0.01) {
   
   if (is.null(safecon[["result"]]) == TRUE) {
     
-    stop("read_tdreport3 could not connect to TDreport")
+    stop("read_tdreport_protein could not connect to TDreport")
     
   } else {
     
-    message("Connection succeeded")
+    message(glue("\nConnection to {basename(tdreport)} succeeded"))
     con <- safecon[["result"]]
     
   }
   
-
   output <- 
     tbl(con, "Isoform") %>% 
     left_join(tbl(con, "GlobalQualitativeConfidence"),
@@ -310,15 +309,15 @@ read_tdreport3 <- function(tdreport, fdr_cutoff = 0.01) {
     left_join(tbl(con, "DataFile"),
               by = c("DataFileId" = "Id")) %>% 
     collect() %>%
-    select("AccessionNumber", "GlobalQvalue",
-           "ObservedPrecursorMass", "Name.y") %>% 
-    rename("filename" = Name.y)
+    dplyr::select("AccessionNumber", "GlobalQvalue",
+                  "ObservedPrecursorMass", "Name.y") %>% 
+    dplyr::rename("filename" = Name.y)
   
   # Close database connection and return output table
   
   dbDisconnect(con)
   
-  message("read_tdreport3 Finished!")
+  message("read_tdreport_protein Finished!")
   
   return(output)
   
@@ -412,7 +411,7 @@ read_tdreport_full <- function(tdreport, fdr_cutoff = 0.01) {
     
   }
 
-  allproteinhits <- 
+  allproteinhits <-
     left_join(hit, globalqualconf) %>% 
     filter(GlobalQvalue <= fdr_cutoff) %>% 
     left_join(datafile) %>%
@@ -421,17 +420,121 @@ read_tdreport_full <- function(tdreport, fdr_cutoff = 0.01) {
     left_join(isoform) %>%
     group_by(HitId) %>%
     filter(GlobalQvalue == min(GlobalQvalue)) %>% 
-    select(-c("ChemicalProteoformId")) %>%
-    select("AccessionNumber", "filename",
+    dplyr::select(-c("ChemicalProteoformId")) %>%
+    dplyr::select("AccessionNumber", "filename",
            "GlobalQvalue", "ResultSetName", everything()) %>% 
-    drop_na() %>% 
-    dplyr::ungroup()
+    dplyr::ungroup() %>% 
+    drop_na()
   
   # Close database connection and return output table
   
   dbDisconnect(con)
   
   message("read_tdreport_full Finished!")
+  
+  return(allproteinhits)
+  
+}
+
+read_tdreport_protein_full <- function(tdreport, fdr_cutoff = 0.01) {
+  
+  # This function will return ALL hits above Q value threshold, not only the 
+  # one with the lowest Q value. 
+  # Output is a tibble with all proteins hits below FDR cutoff
+  # Output should match "Hit Report" from TDViewer
+  # This version used dbplyr to generate SQL
+  
+  message(glue("\nEstablishing connection to {basename(tdreport)}..."))
+  
+  #Establish database connection. Keep trying until it works!
+  
+  safe_dbConnect <- safely(dbConnect)
+  
+  safecon <- safe_dbConnect(RSQLite::SQLite(), ":memory:", dbname = tdreport)
+  
+  if (is.null(safecon[["result"]]) == TRUE) {
+    
+    message("Connection failed, trying again!")
+    
+  }
+  
+  iteration_num <- 1
+  
+  while (is.null(safecon[["result"]]) == TRUE & iteration_num < 100) {
+    
+    iteration_num <- iteration_num + 1
+    
+    message(glue("\nTrying to establish database connection, attempt {iteration_num}"))
+    safecon <- safe_dbConnect(RSQLite::SQLite(), ":memory:",
+                              dbname = tdreport,
+                              synchronous = NULL)
+    
+  }
+  
+  if (is.null(safecon[["result"]]) == TRUE) stop("Failed to connect using SQLite!")
+  
+  con <- safecon[["result"]]
+  
+  # Generate SQL query using dbplyr
+
+  hitscores <- 
+    tbl(con, "Hit") %>%
+    dplyr::rename("HitId" = Id) %>% 
+    select("HitId") %>% 
+    left_join(
+      tbl(con, "HitScore") %>%
+        left_join(tbl(con, "ScoreType"),
+                  by = c("ScoreTypeId" = "Id")) %>%
+        filter(Name == "P-score") %>%
+        select("HitId", "Value")
+    ) %>%
+    rename("P-score" = Value) %>%
+    left_join(
+      tbl(con, "HitScore") %>%
+        left_join(tbl(con, "ScoreType"),
+                  by = c("ScoreTypeId" = "Id")) %>%
+        filter(Name == "C-score") %>%
+        select("HitId", "Value")
+    ) %>%
+    rename("C-score" = Value) %>% 
+    collect()
+  
+  allproteinhits <- 
+    tbl(con, "Hit") %>%
+    rename("HitId" = Id) %>% 
+    left_join(tbl(con, "GlobalQualitativeConfidence")) %>%
+    select("HitId", "ObservedPrecursorMass", "ResultSetId",
+           "DataFileId", "GlobalQvalue", "ChemicalProteoformId") %>% 
+    filter(GlobalQvalue <= fdr_cutoff) %>% 
+    left_join(tbl(con, "DataFile"),
+              by = c("DataFileId" = "Id")) %>%
+    rename("filename" = Name) %>% 
+    select(-c("Description", "FilePath")) %>% 
+    left_join(tbl(con, "ResultSet"),
+              by = c("ResultSetId" = "Id")) %>%
+    rename("ResultSet" = Name) %>% 
+    left_join(tbl(con, "ChemicalProteoform"),
+              by = c("ChemicalProteoformId" = "Id")) %>%
+    rename("ProteoformSequence" = Sequence) %>% 
+    left_join(tbl(con, "BiologicalProteoform"),
+              by = c("ChemicalProteoformId")) %>%
+    rename("BiologicalProteoformId" = Id) %>% 
+    left_join(tbl(con, "Isoform"),
+              by = c("IsoformId" = "Id")) %>%
+    group_by(HitId) %>% 
+    filter(GlobalQvalue == min(GlobalQvalue)) %>%
+    collect() %>%
+    left_join(hitscores) %>% 
+    dplyr::select("HitId", "ProteoformRecordNum", "AccessionNumber", "GlobalQvalue",
+                  "P-score", "C-score", "filename", "ObservedPrecursorMass",
+                  "MonoisotopicMass", "AverageMass", "ProteoformSequence",
+                  IntactSequence = Sequence, "IsSubsequence", "ResultSet")
+  
+  # Close database connection and return output table
+  
+  dbDisconnect(con)
+  
+  message("read_tdreport_protein_full Finished!")
   
   return(allproteinhits)
   
@@ -533,8 +636,8 @@ read_tdreport_filter <- function(tdreport, fdr_cutoff = 0.01) {
     group_by(fraction, AccessionNumber) %>% 
     filter(GlobalQvalue == min(GlobalQvalue)) %>% 
     arrange(fraction) %>%
-    select(-c("ChemicalProteoformId")) %>%
-    select("AccessionNumber", "filename",
+    dplyr::select(-c("ChemicalProteoformId")) %>%
+    dplyr::select("AccessionNumber", "filename",
            "GlobalQvalue", "ResultSetName", everything()) %>% 
     drop_na() %>% 
     dplyr::ungroup()
@@ -552,7 +655,7 @@ read_tdreport_filter <- function(tdreport, fdr_cutoff = 0.01) {
   
   dbDisconnect(con)
   
-  message("read_tdreport_full Finished!")
+  message("read_tdreport_filter Finished!")
   
   return(output)
   
@@ -606,8 +709,8 @@ read_tdreport_withspectra <- function(tdreport, allproteinhitslist,
       RSQLite::dbGetQuery("SELECT Id, FragmentationMethodId, Level
                           FROM Spectrum") %>%
       as_tibble() %>% 
-      rename("MSLevel" = Level) %>% 
-      rename("SpectrumId" = Id)
+      dplyr::rename("MSLevel" = Level) %>% 
+      dplyr::rename("SpectrumId" = Id)
     
     scanheadertospectrum <- con %>%
       RSQLite::dbGetQuery("SELECT ScanHeaderId, SpectrumId
@@ -619,17 +722,32 @@ read_tdreport_withspectra <- function(tdreport, allproteinhitslist,
                           FragmentationMz, FragmentationEnergy
                           FROM ScanHeader") %>%
       as_tibble() %>% 
-      rename("ScanHeaderId" = Id)
+      dplyr::rename("ScanHeaderId" = Id)
 
     
   }
   
+  # hitcountsbyprotein <-
+  #   allproteinhitslist %>% 
+  #   group_by(AccessionNumber) %>% 
+  #   summarize(hit_count = n(),
+  #             TiAbsMass_count = sum(ResultSet == "Tight Absolute Mass"),
+  #             FindUM_count = sum(ResultSet == "Find Unexpected Modifications"),
+  #             BioMrkr_count = sum(ResultSet == "BioMarker"))
+    
+  
   hitswithspectra <-
     allproteinhitslist %>% 
     left_join(hittospectrum) %>% 
-    left_join(spectrum) %>%
-    left_join(scanheadertospectrum) %>%
-    left_join(scanheader)
+    left_join(spectrum)
+  
+  hitswithspectracounts <- 
+    hitswithspectra %>% 
+    group_by(AccessionNumber) %>% 
+    summarize(spectrum_count = n(), 
+              ms1_count = sum(MSLevel == 1),
+              ms2_count = sum(MSLevel == 2))
+    
 
   dbDisconnect(con)
   
@@ -723,15 +841,15 @@ read_tdreport_byfilename <- function(tdreport, fdr_cutoff = 0.01) {
   }
   
   allproteinhits <- 
-    left_join(hit, globalqualconf) %>% 
+    left_join(hit, globalqualconf) %>% # THIS JOIN SCREWS THINGS UP!
     filter(GlobalQvalue <= fdr_cutoff) %>% 
     left_join(datafile) %>%
     left_join(resultset) %>%
     left_join(bioproteoform) %>% 
     left_join(isoform) %>%
     distinct() %>% 
-    select(-c("HitId", "ChemicalProteoformId")) %>%
-    select("AccessionNumber", "filename",
+    dplyr::select(-c("HitId", "ChemicalProteoformId")) %>%
+    dplyr::select("AccessionNumber", "filename",
            "GlobalQvalue", "ResultSetName", everything()) %>% 
     drop_na()
   
@@ -840,15 +958,15 @@ read_tdreport_byfraction <- function(tdreport, fdr_cutoff = 0.01) {
   }
   
   allproteinhits <- 
-    left_join(hit, globalqualconf) %>% 
+    left_join(hit, globalqualconf) %>% # THIS JOIN SCREWS EVERYTHING UP!
     filter(GlobalQvalue <= fdr_cutoff) %>% 
     left_join(datafile) %>%
     left_join(resultset) %>%
     left_join(bioproteoform) %>% 
     left_join(isoform) %>%
     distinct() %>% 
-    select(-c("HitId", "ChemicalProteoformId")) %>%
-    select("AccessionNumber", "filename",
+    dplyr::select(-c("HitId", "ChemicalProteoformId")) %>%
+    dplyr::select("AccessionNumber", "filename",
            "GlobalQvalue", "ResultSetName", everything()) %>% 
     drop_na() %>% 
     addfraction()
@@ -996,8 +1114,8 @@ addmasses <- function(tbl) {
 # average and monoisotopic masses based on protein sequence.
 # These values diverge from those in the TDreport by <0.00005 Da.
 
-  mutate(tbl, monoiso_mass = mw(tbl$SEQUENCE, monoisotopic = TRUE),
-         ave_mass = mw(tbl$SEQUENCE, monoisotopic = FALSE))
+  mutate(tbl, MonoisotopicMass = Peptides::mw(tbl$SEQUENCE, monoisotopic = TRUE),
+         AverageMass = Peptides::mw(tbl$SEQUENCE, monoisotopic = FALSE))
   
 }
 
@@ -1011,11 +1129,11 @@ addfraction <- function(tbl) {
     mutate(
       fraction = case_when(
         stringr::str_detect(filename,
-                            "(?i)(?<=gf|gf_|peppi|frac|fraction|f|f_)[0-9]{1,2}") == TRUE ~
+                            "(?i)(?<=gf|gf_|peppi|peppi_|frac|fraction|f|f_)[0-9]{1,2}") == TRUE ~
           stringr::str_extract(filename,
-                               "(?i)(?<=gf|gf_|peppi|frac|fraction|f|f_)[0-9]{1,2}"),
+                               "(?i)(?<=gf|gf_|peppi|peppi_|frac|fraction|f|f_)[0-9]{1,2}"),
         stringr::str_detect(filename,
-                            "(?i)(?<=gf|gf_|peppi|frac|fraction|f|f_)[0-9]{1,2}") == FALSE ~ "NA"
+                            "(?i)(?<=gf|gf_|peppi|peppi_|frac|fraction|f|f_)[0-9]{1,2}") == FALSE ~ "NA"
       )
     )
   
@@ -1049,6 +1167,27 @@ getGOterms <- function(tbl, file_list) {
   }
   
   return(temptbl)
+}
+
+gethitcounts <- function(allproteinhitslist) {
+  
+  # hitcountsbyprotein <-
+  #   allproteinhitslist %>%
+  #   group_by(AccessionNumber) %>% 
+  #   summarize(hit_count = n(),
+  #             MonoisotopicMass = mean(MonoisotopicMass),
+  #             AverageMass = mean(AverageMass),
+  #             TiAbsMass_count = sum(ResultSet == "Tight Absolute Mass"),
+  #             FindUM_count = sum(ResultSet == "Find Unexpected Modifications"),
+  #             BioMrkr_count = sum(ResultSet == "BioMarker")) 
+  
+  hitcountsbyprotein <-
+    allproteinhitslist %>%
+    group_by(AccessionNumber, ResultSet) %>% 
+    summarize(hit_count = n(),
+              MeanMonoisotopicMass = mean(MonoisotopicMass),
+              MeanAverageMass = mean(AverageMass))
+  
 }
 
 getlocations <- function(resultslist) {
@@ -1366,14 +1505,14 @@ if (length(unique(extension)) > 1) {
   
 } else if (extension[[1]] == "tdReport") {
   
-  message("Reading protein data from tdReport...\n")
-  proteinlist <- filelist %>% future_map(read_tdreport2, fdr_cutoff = fdr)
+  message("\nReading protein data from tdReport...\n")
+  proteinlist <- filelist %>% future_map(read_tdreport_protein, fdr_cutoff = fdr)
   
-  message("Reading full protein data from tdReport...\n")
+  message("\nReading full protein data from tdReport...\n")
   proteinlistfull <- filelist %>% 
-    future_map(read_tdreport_full, fdr_cutoff = fdr)
+    future_map(read_tdreport_protein_full, fdr_cutoff = fdr)
   
-  message("Reading full protein data with spectra from tdReport...\n")
+  message("\nReading full protein data with spectra from tdReport...\n")
   proteinlistwithspectra <- filelist %>% 
     future_map2(proteinlistfull,
                 read_tdreport_withspectra,
@@ -1430,12 +1569,18 @@ results_protein <- proteinlist %>%
 
 proteinlistfull <- 
   proteinlistfull %>%
-  future_map(addmasses) %>%
   future_map(addfraction)
   
 results_protein[[length(results_protein)+1]] <- getlocations_protein(results_protein)
 
 names(results_protein) <- unlist(filelist) %>% basename()
+
+## This chunk will get hit counts for proteins in the "all hits"
+## results
+
+hit_counts_from_all_hits <-
+  proteinlistfull %>% 
+  map(gethitcounts)
 
 ## This chunk will get protein location counts by datafile (.raw file) instead
 ## of for each TDreport in the analysis
@@ -1461,7 +1606,7 @@ protein_counts_byfraction <-
 
 if (exists("systime") == FALSE) systime <- format(Sys.time(), "%Y%m%d_%H%M%S")
 
-resultsname <- glue("{systime}_protein_results.xlsx")
+resultsname <- glue("protein_results/{systime}_protein_results.xlsx")
 resultsobjectname <- glue("{systime}_protein_results.rds")
 
 names(results_protein) <- unlist(filelist) %>% basename()
@@ -1483,6 +1628,8 @@ setwd(here("output"))
 
 
 # Save protein results ----------------------------------------------------
+
+if (dir.exists("protein_results") == FALSE) dir.create("protein_results")
 
 results_protein %>%
   writexl::write_xlsx(path = resultsname)
@@ -1537,6 +1684,22 @@ if (tdreport_file == TRUE) {
   map2(PLBFrac_list, PLBFrac_nameslist, ~saveWorkbook(.x, .y, overwrite = TRUE))
   
 
+# Save hit counts from allhits --------------------------------------------
+
+  if (dir.exists("hitcounts") == FALSE) dir.create("hitcounts")
+  
+  hitcounts_nameslist <- 
+    filelist %>%
+    map(basename) %>%
+    map(file_path_sans_ext) %>%
+    glue_data("hitcounts/{.}.xlsx") %>% 
+    as.list
+  
+  walk2(hit_counts_from_all_hits,
+        hitcounts_nameslist,
+        ~writexl::write_xlsx(.x, path = .y)
+  )
+  
   # Save counts by datafile -------------------------------------------------
 
   if (dir.exists("countsbydatafile") == FALSE) dir.create("countsbydatafile")
